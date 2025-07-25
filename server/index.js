@@ -77,13 +77,17 @@ app.post('/api/generate-bom', validateBomRequest, async (req, res) => {
 
     console.log(`🔄 BOM Generation started with ${llmProvider}`);
     console.log(`📝 Follow-up answers provided:`, followUpAnswers ? 'Yes' : 'No');
+    if (followUpAnswers) {
+      console.log(`📋 Follow-up answers count: ${Object.keys(followUpAnswers).length}`);
+    }
 
     // Step 1: Analyze requirements with selected LLM
     console.log(`1️⃣ Analyzing requirements with ${llmProvider}...`);
     const analysis = await llmService.analyzeRequirements(requirements, llmProvider, followUpAnswers);
 
     // Step 2: Check if follow-up questions are needed
-    if (analysis.needsFollowUp) {
+    // Skip follow-up questions if answers are already provided
+    if (analysis.needsFollowUp && (!followUpAnswers || Object.keys(followUpAnswers).length === 0)) {
       console.log(`❓ Follow-up questions needed`);
       return res.json({
         success: true,
