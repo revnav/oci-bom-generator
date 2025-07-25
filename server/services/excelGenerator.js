@@ -98,7 +98,24 @@ class ExcelGenerator {
       this.applyFormatting(worksheet);
       
       // Enable calculation mode to ensure formulas are calculated
-      workbook.calcProperties.fullCalcOnLoad = true;
+      workbook.calcProperties = {
+        fullCalcOnLoad: true,
+        fullPrecision: true,
+        calcCompleted: true,
+        calcOnSave: true,
+        calcId: '999999'
+      };
+      
+      // Force calculation of all formulas by triggering recalculation
+      worksheet.eachRow((row) => {
+        row.eachCell((cell) => {
+          if (cell.type === ExcelJS.ValueType.Formula) {
+            // Set the formula again to trigger Excel to recognize it as a formula
+            const formula = cell.formula;
+            cell.value = { formula: formula };
+          }
+        });
+      });
       
       // Generate buffer
       const buffer = await workbook.xlsx.writeBuffer();
@@ -211,8 +228,8 @@ class ExcelGenerator {
       // Monthly Price = Quantity × Unit Price × Monthly Multiplier
       // For hourly: 2 OCPUs × $0.05/hour × 744 hours/month = Monthly Cost
       // For monthly: 100 GB × $0.025/GB/month × 1 = Monthly Cost
-      { col: 7, value: `=D${row}*F${row}*${monthlyMultiplier}`, style: this.defaultStyles.currency },
-      { col: 8, value: `=G${row}*12`, style: this.defaultStyles.currency },
+      { col: 7, value: { formula: `D${row}*F${row}*${monthlyMultiplier}` }, style: this.defaultStyles.currency },
+      { col: 8, value: { formula: `G${row}*12` }, style: this.defaultStyles.currency },
       { col: 9, value: item.notes || '', style: this.defaultStyles.data }
     ];
 
@@ -290,11 +307,11 @@ class ExcelGenerator {
     const endRow = row - 1;
 
     const monthlySubtotal = worksheet.getCell(row, 7);
-    monthlySubtotal.value = `=SUBTOTAL(109,G${startRow}:G${endRow})`;
+    monthlySubtotal.value = { formula: `SUBTOTAL(109,G${startRow}:G${endRow})` };
     monthlySubtotal.style = this.defaultStyles.total;
 
     const annualSubtotal = worksheet.getCell(row, 8);
-    annualSubtotal.value = `=SUBTOTAL(109,H${startRow}:H${endRow})`;
+    annualSubtotal.value = { formula: `SUBTOTAL(109,H${startRow}:H${endRow})` };
     annualSubtotal.style = this.defaultStyles.total;
   }
 
@@ -325,12 +342,12 @@ class ExcelGenerator {
       const monthlySubtotalCells = this.subtotalRows.map(row => `G${row}`).join(',');
       const annualSubtotalCells = this.subtotalRows.map(row => `H${row}`).join(',');
       
-      worksheet.getCell(currentRow, 7).value = `=SUM(${monthlySubtotalCells})`;
-      worksheet.getCell(currentRow, 8).value = `=SUM(${annualSubtotalCells})`;
+      worksheet.getCell(currentRow, 7).value = { formula: `SUM(${monthlySubtotalCells})` };
+      worksheet.getCell(currentRow, 8).value = { formula: `SUM(${annualSubtotalCells})` };
     } else {
       // Fallback to range sum if no subtotal rows tracked
-      worksheet.getCell(currentRow, 7).value = `=SUM(G7:G${dataEndRow})`;
-      worksheet.getCell(currentRow, 8).value = `=SUM(H7:H${dataEndRow})`;
+      worksheet.getCell(currentRow, 7).value = { formula: `SUM(G7:G${dataEndRow})` };
+      worksheet.getCell(currentRow, 8).value = { formula: `SUM(H7:H${dataEndRow})` };
     }
     
     worksheet.getCell(currentRow, 7).style = this.defaultStyles.currency;
@@ -354,9 +371,9 @@ class ExcelGenerator {
     // Discount amount
     worksheet.getCell(currentRow, 6).value = 'Discount Amount:';
     worksheet.getCell(currentRow, 6).style = { font: { bold: true }, alignment: { horizontal: 'right' } };
-    worksheet.getCell(currentRow, 7).value = `=G${currentRow-2}*G${currentRow-1}`;
+    worksheet.getCell(currentRow, 7).value = { formula: `G${currentRow-2}*G${currentRow-1}` };
     worksheet.getCell(currentRow, 7).style = this.defaultStyles.currency;
-    worksheet.getCell(currentRow, 8).value = `=H${currentRow-2}*G${currentRow-1}`;
+    worksheet.getCell(currentRow, 8).value = { formula: `H${currentRow-2}*G${currentRow-1}` };
     worksheet.getCell(currentRow, 8).style = this.defaultStyles.currency;
     currentRow++;
 
@@ -367,12 +384,12 @@ class ExcelGenerator {
       alignment: { horizontal: 'right' },
       fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'c6efce' } }
     };
-    worksheet.getCell(currentRow, 7).value = `=G${currentRow-3}-G${currentRow-1}`;
+    worksheet.getCell(currentRow, 7).value = { formula: `G${currentRow-3}-G${currentRow-1}` };
     worksheet.getCell(currentRow, 7).style = {
       ...this.defaultStyles.total,
       fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'c6efce' } }
     };
-    worksheet.getCell(currentRow, 8).value = `=H${currentRow-3}-H${currentRow-1}`;
+    worksheet.getCell(currentRow, 8).value = { formula: `H${currentRow-3}-H${currentRow-1}` };
     worksheet.getCell(currentRow, 8).style = {
       ...this.defaultStyles.total,
       fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'c6efce' } }
