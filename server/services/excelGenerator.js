@@ -100,16 +100,6 @@ class ExcelGenerator {
       // Enable calculation mode to ensure formulas are calculated
       workbook.calcProperties.fullCalcOnLoad = true;
       
-      // Force calculation of all formulas
-      worksheet.eachRow((row) => {
-        row.eachCell((cell) => {
-          if (cell.type === ExcelJS.ValueType.Formula) {
-            // Force Excel to recalculate this formula when opened
-            cell.formulaType = ExcelJS.FormulaType.None;
-          }
-        });
-      });
-      
       // Generate buffer
       const buffer = await workbook.xlsx.writeBuffer();
       return buffer;
@@ -218,6 +208,9 @@ class ExcelGenerator {
       { col: 4, value: item.quantity || 1, style: { ...this.defaultStyles.data, alignment: { horizontal: 'center' } } },
       { col: 5, value: item.metric || item.metricName, style: this.defaultStyles.data },
       { col: 6, value: item.unitPrice || 0, style: this.defaultStyles.currency },
+      // Monthly Price = Quantity × Unit Price × Monthly Multiplier
+      // For hourly: 2 OCPUs × $0.05/hour × 744 hours/month = Monthly Cost
+      // For monthly: 100 GB × $0.025/GB/month × 1 = Monthly Cost
       { col: 7, value: `=D${row}*F${row}*${monthlyMultiplier}`, style: this.defaultStyles.currency },
       { col: 8, value: `=G${row}*12`, style: this.defaultStyles.currency },
       { col: 9, value: item.notes || '', style: this.defaultStyles.data }
@@ -234,38 +227,55 @@ class ExcelGenerator {
     if (!metric) return 1;
     
     const metricLower = metric.toLowerCase();
+    console.log(`🔢 Calculating multiplier for metric: "${metric}"`);
     
     // Hourly metrics - multiply by hours in month
-    if (metricLower.includes('hour') || metricLower.includes('_hour')) {
+    // Examples: "OCPU Hour", "Per Hour", "hour", "INSTANCE_HOUR"
+    if (metricLower.includes('hour') || metricLower.includes('_hour') || metricLower.includes('/hour')) {
+      console.log(`⏰ Hourly metric detected, using 744 multiplier`);
       return 744; // 24 hours * 31 days (maximum days in month for accurate estimation)
     }
     
     // Daily metrics - multiply by days in month
-    if (metricLower.includes('day') || metricLower.includes('_day')) {
+    if (metricLower.includes('day') || metricLower.includes('_day') || metricLower.includes('/day')) {
+      console.log(`📅 Daily metric detected, using 31 multiplier`);
       return 31; // Maximum days in month
     }
     
     // Weekly metrics - multiply by weeks in month
-    if (metricLower.includes('week') || metricLower.includes('_week')) {
+    if (metricLower.includes('week') || metricLower.includes('_week') || metricLower.includes('/week')) {
+      console.log(`📊 Weekly metric detected, using 4.33 multiplier`);
       return 4.33; // Average weeks per month (52/12)
     }
     
     // Monthly metrics - no multiplier needed
-    if (metricLower.includes('month') || metricLower.includes('_month')) {
+    // Examples: "GB per Month", "Per Month", "monthly", "STORAGE_GB_MONTH"
+    if (metricLower.includes('month') || metricLower.includes('_month') || metricLower.includes('/month')) {
+      console.log(`📆 Monthly metric detected, using 1 multiplier`);
       return 1;
     }
     
     // Yearly metrics - divide by 12 to get monthly
-    if (metricLower.includes('year') || metricLower.includes('_year') || metricLower.includes('annual')) {
+    if (metricLower.includes('year') || metricLower.includes('_year') || metricLower.includes('annual') || metricLower.includes('/year')) {
+      console.log(`🗓️ Yearly metric detected, using 0.0833 multiplier`);
       return 0.0833; // 1/12
     }
     
-    // For GB/TB storage metrics that are typically monthly
-    if (metricLower.includes('gb') || metricLower.includes('tb') || metricLower.includes('_storage')) {
+    // Storage metrics (GB, TB) that are typically monthly
+    // Examples: "GB", "TB", "STORAGE_GB", most storage services are monthly
+    if (metricLower.includes('gb') || metricLower.includes('tb') || metricLower.includes('_storage') || metricLower.includes('storage')) {
+      console.log(`💾 Storage metric detected, using 1 multiplier (typically monthly)`);
       return 1; // Usually already monthly pricing
     }
     
+    // Per-request or per-transaction metrics (usually no time component)
+    if (metricLower.includes('request') || metricLower.includes('transaction') || metricLower.includes('call')) {
+      console.log(`🔄 Request/transaction metric detected, using 1 multiplier`);
+      return 1;
+    }
+    
     // Default to 1 (no multiplier) for unknown metrics
+    console.log(`❓ Unknown metric type, using 1 multiplier as default`);
     return 1;
   }
 
@@ -394,8 +404,10 @@ class ExcelGenerator {
     // Add assumptions
     const assumptions = [
       'Pricing is based on Oracle Cloud Infrastructure list prices and may vary by region',
-      'Monthly calculations assume 730 hours per month for hourly services',
+      'Monthly calculations for hourly services: Quantity × Unit Price × 744 hours/month',
+      'Monthly calculations for storage services: Quantity × Unit Price (already monthly)',
       'Annual pricing is calculated as Monthly × 12 (no annual discount applied)',
+      'Quantities represent actual resource units (e.g., 2 OCPUs, 100 GB storage)',
       'Actual usage may vary based on application requirements and user behavior',
       'Additional services such as support, training, and professional services not included',
       'Network egress charges may apply based on data transfer requirements',
