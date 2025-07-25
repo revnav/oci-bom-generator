@@ -92,7 +92,7 @@ const SavedPrompts = ({ onUsePrompt, onCreateNew }) => {
   const handleUsePrompt = async (prompt) => {
     try {
       // Increment usage count
-      await useMutation.mutateAsync(prompt.id);
+      await usePromptMutation.mutateAsync(prompt.id);
       
       // Pass prompt data to parent component
       onUsePrompt({
