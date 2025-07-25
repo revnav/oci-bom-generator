@@ -91,7 +91,12 @@ const FollowUpQuestions = ({ questions, answers, onAnswersChange, onSubmit, isLo
                   htmlFor={`question-${index}`}
                   className="block text-sm font-medium text-gray-900 mb-2"
                 >
-                  Question {index + 1}: {question}
+                  Question {index + 1}: {typeof question === 'string' ? question : question.question}
+                  {typeof question !== 'string' && question.area && (
+                    <span className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                      {question.area}
+                    </span>
+                  )}
                 </label>
                 <textarea
                   id={`question-${index}`}
