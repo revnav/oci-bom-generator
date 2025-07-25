@@ -35,6 +35,12 @@ class LLMService {
       bomGeneration: `You are creating a detailed Bill of Materials (BOM) for Oracle Cloud Infrastructure services.
       Based on the analyzed requirements and available OCI services with pricing, create a comprehensive BOM.
       
+      CRITICAL QUANTITY RULES:
+      - For HOURLY services (OCPU_HOUR, MEMORY_GB_HOUR): quantity = number of resources (e.g., 4 OCPUs, 8 GB RAM)
+      - For MONTHLY services (STORAGE_GB, BANDWIDTH_GB): quantity = total amount per month (e.g., 100 GB storage)
+      - DO NOT multiply hourly quantities by hours - the Excel will handle time calculations
+      - Example: For 2 servers with 2 OCPUs each running 24/7, quantity = 4 (not 4 × 744)
+      
       IMPORTANT: Return JSON in this EXACT format:
       {
         "items": [
@@ -50,6 +56,19 @@ class LLMService {
             "category": "Compute",
             "serviceCategory": "Compute",
             "notes": "2 application servers × 2 OCPUs each"
+          },
+          {
+            "sku": "B85729",
+            "partNumber": "B85729",
+            "description": "Block Volume Storage",
+            "displayName": "Block Volume Storage", 
+            "quantity": 200,
+            "metric": "STORAGE_GB_MONTH",
+            "metricName": "GB per Month",
+            "unitPrice": 0.0255,
+            "category": "Storage",
+            "serviceCategory": "Storage",
+            "notes": "100 GB per server × 2 servers"
           }
         ]
       }
