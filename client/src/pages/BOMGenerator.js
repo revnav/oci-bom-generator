@@ -6,21 +6,27 @@ import RequirementsInput from '../components/RequirementsInput';
 import DocumentUpload from '../components/DocumentUpload';
 import FollowUpQuestions from '../components/FollowUpQuestions';
 import LoadingSpinner from '../components/LoadingSpinner';
+import SavedPrompts from '../components/SavedPrompts';
 import { generateBOM, uploadDocument, getLLMProviders } from '../services/api';
 import { 
   DocumentTextIcon, 
   CloudArrowDownIcon,
   SparklesIcon,
-  CpuChipIcon 
+  CpuChipIcon,
+  BookmarkIcon,
+  PlusIcon
 } from '@heroicons/react/24/outline';
 
 const BOMGenerator = () => {
+  const [activeView, setActiveView] = useState('create'); // 'create' or 'saved'
   const [selectedLLM, setSelectedLLM] = useState('claude');
   const [requirements, setRequirements] = useState('');
   const [uploadedDocument, setUploadedDocument] = useState(null);
   const [followUpQuestions, setFollowUpQuestions] = useState([]);
   const [followUpAnswers, setFollowUpAnswers] = useState({});
   const [showFollowUp, setShowFollowUp] = useState(false);
+  const [currentPromptId, setCurrentPromptId] = useState(null); // For future editing functionality
+  const [currentPromptName, setCurrentPromptName] = useState(null);
 
   // Fetch available LLM providers
   const { data: llmProviders, isLoading: providersLoading } = useQuery(
@@ -133,28 +139,105 @@ const BOMGenerator = () => {
     setFollowUpQuestions([]);
     setFollowUpAnswers({});
     setShowFollowUp(false);
+    setCurrentPromptId(null);
+    setCurrentPromptName(null);
+  };
+
+  const handleUseSavedPrompt = (promptData) => {
+    setRequirements(promptData.requirements);
+    setFollowUpAnswers(promptData.followUpAnswers || {});
+    setSelectedLLM(promptData.llmProvider);
+    setCurrentPromptId(promptData.promptId);
+    setCurrentPromptName(promptData.promptName);
+    
+    // If the prompt has follow-up answers, skip the follow-up questions
+    if (promptData.followUpAnswers && Object.keys(promptData.followUpAnswers).length > 0) {
+      setShowFollowUp(false);
+    }
+    
+    // Switch to create view
+    setActiveView('create');
+  };
+
+  const handleCreateNew = () => {
+    resetForm();
+    setActiveView('create');
   };
 
   const isLoading = bomMutation.isLoading || uploadMutation.isLoading;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Page Header */}
       <div className="text-center mb-8">
         <div className="flex items-center justify-center space-x-2 mb-4">
           <SparklesIcon className="w-8 h-8 text-blue-600" />
           <h1 className="text-3xl font-bold text-gray-900">
-            Generate Your OCI Bill of Materials
+            OCI Bill of Materials Generator
           </h1>
         </div>
         <p className="text-lg text-gray-600 max-w-3xl mx-auto">
-          Describe your infrastructure requirements in natural language or upload documents. 
-          Our AI will analyze your needs and generate a detailed OCI BOM with accurate pricing.
+          Create new BOMs or reuse saved prompts. Our AI analyzes your requirements and generates detailed OCI BOMs with accurate pricing.
         </p>
       </div>
 
+      {/* Navigation Tabs */}
+      <div className="mb-8">
+        <nav className="flex space-x-1 bg-gray-100 p-1 rounded-lg max-w-md mx-auto">
+          <button
+            onClick={() => setActiveView('create')}
+            className={`flex-1 flex items-center justify-center space-x-2 px-4 py-3 text-sm font-medium rounded-md transition-colors ${
+              activeView === 'create'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <PlusIcon className="w-4 h-4" />
+            <span>Create New BOM</span>
+          </button>
+          <button
+            onClick={() => setActiveView('saved')}
+            className={`flex-1 flex items-center justify-center space-x-2 px-4 py-3 text-sm font-medium rounded-md transition-colors ${
+              activeView === 'saved'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <BookmarkIcon className="w-4 h-4" />
+            <span>Saved Prompts</span>
+          </button>
+        </nav>
+      </div>
+
       {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {activeView === 'saved' ? (
+        <SavedPrompts 
+          onUsePrompt={handleUseSavedPrompt}
+          onCreateNew={handleCreateNew}
+        />
+      ) : (
+        <>
+          {/* Current Prompt Info */}
+          {currentPromptName && (
+            <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center space-x-2">
+                <BookmarkIcon className="w-5 h-5 text-blue-600" />
+                <span className="font-medium text-blue-900">Using saved prompt:</span>
+                <span className="text-blue-700">{currentPromptName}</span>
+                <button
+                  onClick={() => {
+                    setCurrentPromptId(null);
+                    setCurrentPromptName(null);
+                  }}
+                  className="ml-auto text-blue-600 hover:text-blue-700 text-sm"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column - Configuration */}
         <div className="lg:col-span-1 space-y-6">
           {/* LLM Selection */}
@@ -297,6 +380,8 @@ const BOMGenerator = () => {
           </div>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 };

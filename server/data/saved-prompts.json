@@ -1,0 +1,21 @@
+[
+  {
+    "id": "prompt_1753483489405_3c9f3ed4u",
+    "name": "BOM for E-Commerce System",
+    "description": "E-commerce platform with payment processing, inventory management, order tracking, customer support....",
+    "category": "E-commerce",
+    "requirements": "E-commerce platform with payment processing, inventory management, order tracking, customer support. Need high security and PCI compliance. Expected 50,000 users.",
+    "followUpAnswers": {
+      "region": "us-west-2",
+      "compliance": "PCI-DSS",
+      "payment_methods": "credit_card_paypal"
+    },
+    "llmProvider": "gemini",
+    "createdAt": "2025-07-25T22:44:49.405Z",
+    "lastUsed": "2025-07-25T22:44:49.405Z",
+    "usageCount": 1,
+    "tags": [
+      "secure"
+    ]
+  }
+]

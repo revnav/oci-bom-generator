@@ -145,29 +145,62 @@ Create a detailed BOM with realistic quantities and pricing calculations.`;
       throw new Error('Prompt still too long after optimization. Please try with fewer requirements.');
     }
 
+    let response;
     try {
-      const response = await this.callLLM(provider, this.systemPrompts.bomGeneration, prompt);
+      console.log(`🤖 Calling ${provider} for BOM generation...`);
+      response = await this.callLLM(provider, this.systemPrompts.bomGeneration, prompt);
+      console.log(`📝 ${provider} response length:`, response?.length || 0);
+      console.log(`📄 ${provider} response preview:`, response?.substring(0, 200) || 'No response');
       
-      // Extract JSON from response (handle cases where LLM adds explanatory text)
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        console.error('No JSON found in LLM response:', response);
+      // Extract JSON from response - handle markdown code blocks
+      let jsonString = response;
+      
+      // Remove markdown code blocks if present
+      if (response.includes('```json')) {
+        const codeBlockMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
+        if (codeBlockMatch) {
+          jsonString = codeBlockMatch[1].trim();
+        }
+      } else {
+        // Fallback to original regex
+        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          jsonString = jsonMatch[0];
+        }
+      }
+      
+      if (!jsonString || (!jsonString.startsWith('{') && !jsonString.startsWith('['))) {
+        console.error('❌ No valid JSON found in LLM response from', provider);
+        console.error('Full response:', response);
         throw new Error('LLM did not return valid JSON format');
       }
       
-      const parsedResult = JSON.parse(jsonMatch[0]);
+      console.log(`🔍 Extracted JSON from ${provider}:`, jsonString.substring(0, 200) + '...');
+      
+      // Try to fix common JSON issues before parsing
+      let cleanedJson = jsonString
+        .replace(/,\s*}/g, '}')  // Remove trailing commas in objects
+        .replace(/,\s*]/g, ']')  // Remove trailing commas in arrays
+        .replace(/([{,]\s*)(\w+):/g, '$1"$2":'); // Quote unquoted keys
+      
+      const parsedResult = JSON.parse(cleanedJson);
       console.log('✅ LLM BOM generation successful. Items count:', parsedResult.items?.length || 0);
       
       // Validate the structure
       if (!parsedResult.items || !Array.isArray(parsedResult.items)) {
         console.error('❌ Invalid BOM structure - missing items array');
+        console.error('Parsed result structure:', Object.keys(parsedResult));
         throw new Error('BOM structure invalid - missing items array');
       }
       
       return parsedResult;
     } catch (error) {
-      console.error(`Error generating BOM with ${provider}:`, error);
-      console.error('Raw LLM response for debugging:', response?.substring(0, 500) || 'No response');
+      console.error(`❌ Error generating BOM with ${provider}:`, error.message);
+      if (response) {
+        console.error('📄 Full raw response for debugging:', response);
+      } else {
+        console.error('❌ No response received from LLM');
+      }
       throw new Error(`Failed to generate BOM: ${error.message}`);
     }
   }
@@ -246,7 +279,20 @@ Create a detailed BOM with realistic quantities and pricing calculations.`;
   }
 
   async callGemini(systemPrompt, userPrompt) {
-    const model = this.gemini.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+    if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'your_gemini_api_key_here') {
+      throw new Error('Gemini API key not configured. Please set GEMINI_API_KEY in your .env file.');
+    }
+
+    // Use the current Gemini 2.5 Pro model
+    const model = this.gemini.getGenerativeModel({ 
+      model: 'gemini-2.5-pro',
+      generationConfig: {
+        temperature: 0.3,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 8192,
+      }
+    });
     
     const prompt = `${systemPrompt}\n\nUser Request: ${userPrompt}`;
     const result = await model.generateContent(prompt);
