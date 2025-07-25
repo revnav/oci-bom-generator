@@ -105,10 +105,13 @@ const BOMGenerator = () => {
       return;
     }
 
+    // If we have follow-up answers (from saved prompt), always include them
+    const hasExistingAnswers = Object.keys(followUpAnswers).length > 0;
+    
     const requestData = {
       requirements: requirements.trim(),
       llmProvider: selectedLLM,
-      ...(showFollowUp && Object.keys(followUpAnswers).length > 0 && { followUpAnswers })
+      ...(hasExistingAnswers && { followUpAnswers })
     };
 
     bomMutation.mutate(requestData);
@@ -150,9 +153,21 @@ const BOMGenerator = () => {
     setCurrentPromptId(promptData.promptId);
     setCurrentPromptName(promptData.promptName);
     
-    // If the prompt has follow-up answers, skip the follow-up questions
+    // If the prompt has follow-up answers, show them pre-filled
     if (promptData.followUpAnswers && Object.keys(promptData.followUpAnswers).length > 0) {
-      setShowFollowUp(false);
+      // Extract the actual follow-up questions from the answers keys
+      const questionNumbers = Object.keys(promptData.followUpAnswers)
+        .filter(key => !isNaN(key)) // Only numbered questions, exclude 'region', 'budget', etc.
+        .sort((a, b) => parseInt(a) - parseInt(b));
+      
+      if (questionNumbers.length > 0) {
+        // Create dummy questions for display (we'll get real ones from the first API call)
+        const dummyQuestions = questionNumbers.map((_, index) => 
+          `Question ${index + 1} (from saved prompt)`
+        );
+        setFollowUpQuestions(dummyQuestions);
+        setShowFollowUp(true);
+      }
     }
     
     // Switch to create view
@@ -303,9 +318,19 @@ const BOMGenerator = () => {
           {/* Follow-up Questions */}
           {showFollowUp && (
             <div className="bg-yellow-50 rounded-lg shadow-md p-6 border border-yellow-200">
-              <h2 className="text-lg font-semibold text-yellow-900 mb-4">
-                Additional Information Needed
-              </h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-yellow-900">
+                  {Object.keys(followUpAnswers).length > 0 ? 'Pre-filled Follow-up Answers' : 'Additional Information Needed'}
+                </h2>
+                {Object.keys(followUpAnswers).length > 0 && (
+                  <div className="flex items-center text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full">
+                    <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    From saved prompt
+                  </div>
+                )}
+              </div>
               <FollowUpQuestions
                 questions={followUpQuestions}
                 answers={followUpAnswers}

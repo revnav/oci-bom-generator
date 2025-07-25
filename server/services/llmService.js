@@ -61,9 +61,18 @@ class LLMService {
   }
 
   async analyzeRequirements(requirements, provider, followUpAnswers = null) {
-    if (followUpAnswers) {
+    if (followUpAnswers && Object.keys(followUpAnswers).length > 0) {
       // When follow-up answers are provided, create a comprehensive analysis
-      const prompt = `Original requirements: ${requirements}\n\nFollow-up answers: ${JSON.stringify(followUpAnswers)}\n\nNow provide a complete analysis with all the information provided. Do not ask for additional follow-up questions since they have already been answered.`;
+      const answersText = Object.entries(followUpAnswers)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join('\n');
+        
+      const prompt = `Original requirements: ${requirements}
+
+Follow-up answers provided:
+${answersText}
+
+Based on the original requirements and these follow-up answers, provide a complete infrastructure analysis. All necessary information has been provided, so do not request any additional follow-up questions.`;
       
       const systemPrompt = `You are an Oracle Cloud Infrastructure (OCI) expert and solutions architect. 
       Analyze the provided requirements and follow-up answers to extract complete infrastructure needs including:
@@ -75,8 +84,9 @@ class LLMService {
       - Backup and disaster recovery needs
       - Regional/availability zone preferences
       
-      Since follow-up questions have been answered, provide a complete analysis without requesting additional information.
-      Respond in JSON format with: parsedRequirements, needsFollowUp (always false), followUpQuestions (empty array)`;
+      IMPORTANT: Since follow-up questions have already been answered, set needsFollowUp to false and provide empty followUpQuestions array.
+      
+      IMPORTANT: Respond with ONLY valid JSON. Do not include any explanatory text, markdown formatting, or anything other than the JSON object. Start your response with { and end with }. Required format: {"parsedRequirements": {...}, "needsFollowUp": false, "followUpQuestions": []}`;
 
       try {
         const response = await this.callLLM(provider, systemPrompt, prompt);
