@@ -1,5 +1,68 @@
 [
   {
+    "id": "prompt_1753557631478_j857yfkge",
+    "name": "BOM for Database System",
+    "description": "\\n\\n--- Infrastructure Requirements from uploaded document ---\\n\\nCompute Requirements:\\n- Instances...",
+    "category": "Web Applications",
+    "requirements": "\\n\\n--- Infrastructure Requirements from uploaded document ---\\n\\nCompute Requirements:\\n- Instances needed: 6\\n- CPU cores per instance: 4\\n- Memory per instance: 60 GB\\n- Instance type: standard\\n\\nStorage Requirements:\\n- Block storage: 3556 GB\\n- Object storage: 1000 GB\\n- File storage: 500 GB\\n\\nDatabase Requirements:\\n- Type: oracle\\n- Size: large\\n- Storage: 712 GB\\n\\nNetwork Requirements:\\n- Load balancer needed: Yes\\n- Bandwidth: 10 Gbps\\n- VPN required: Yes\\n\\nSummary: Oracle database environment with 6 instances (mix of prod and test), running Oracle 11.2.0.4 versions. Largest instance requires 4 cores and 60GB RAM, with others having smaller configurations. Total storage requirement approximately 3.5TB with largest DB size of 712GB.\\n",
+    "followUpAnswers": {
+      "0": "None",
+      "1": "None",
+      "2": "None",
+      "3": "2 Prod and rest are Test",
+      "4": "Consider standard. Do not add any apps tier this is just DB.\nUse Base Database Service BYOL skus."
+    },
+    "llmProvider": "claude",
+    "createdAt": "2025-07-26T19:20:31.478Z",
+    "lastUsed": "2025-07-26T19:20:31.478Z",
+    "usageCount": 1,
+    "tags": [
+      "high-availability"
+    ]
+  },
+  {
+    "id": "prompt_1753557238609_lrd1rx9vr",
+    "name": "BOM for Database System",
+    "description": "\\n\\n--- Infrastructure Requirements from uploaded document ---\\n\\nCompute Requirements:\\n- Instances...",
+    "category": "E-commerce",
+    "requirements": "\\n\\n--- Infrastructure Requirements from uploaded document ---\\n\\nCompute Requirements:\\n- Instances needed: 6\\n- CPU cores per instance: 4\\n- Memory per instance: 60 GB\\n- Instance type: standard\\n\\nStorage Requirements:\\n- Block storage: 14336 GB\\n- Object storage: 14336 GB\\n- File storage: 0 GB\\n\\nDatabase Requirements:\\n- Type: oracle\\n- Size: xlarge\\n- Storage: 14336 GB\\n\\nNetwork Requirements:\\n- Load balancer needed: Yes\\n- Bandwidth: 10 Gbps\\n- VPN required: Yes\\n\\nSummary: Infrastructure for 6 Oracle databases (2 prod, 4 test) with version 11.2.0.4, total storage of 14TB, varying compute needs (1-4 cores, 15-60GB RAM per instance). Includes production EDW of 10.1TB and smaller databases ranging from 712GB to 1TB. All databases require export and local storage capabilities.\\n",
+    "followUpAnswers": {
+      "0": "NA",
+      "1": "None",
+      "2": "No",
+      "3": "NA",
+      "4": "Private Flexible shape"
+    },
+    "llmProvider": "claude",
+    "createdAt": "2025-07-26T19:13:58.610Z",
+    "lastUsed": "2025-07-26T19:13:58.610Z",
+    "usageCount": 1,
+    "tags": [
+      "high-availability"
+    ]
+  },
+  {
+    "id": "prompt_1753488700743_2dd6c8g4a",
+    "name": "BOM for \\N\\N--- From Uploaded Document",
+    "description": "\\n\\n--- From uploaded document (prompt_sheet.xlsx) ---\\nundefined",
+    "category": "Data & Analytics",
+    "requirements": "\\n\\n--- From uploaded document (prompt_sheet.xlsx) ---\\nundefined",
+    "followUpAnswers": {
+      "0": "See data in the uploaded excel",
+      "1": "See data in the uploaded excel",
+      "2": "None",
+      "3": "Oracle",
+      "4": "None",
+      "5": "Ignore",
+      "6": "us-ashburn-1"
+    },
+    "llmProvider": "claude",
+    "createdAt": "2025-07-26T00:11:40.744Z",
+    "lastUsed": "2025-07-26T00:11:40.744Z",
+    "usageCount": 1,
+    "tags": []
+  },
+  {
     "id": "prompt_1753488420401_53pn3x9uk",
     "name": "BOM for Generate Bom For Following:",
     "description": "Generate BOM for following:\n1. 2 app servers - 2 OPCUs 16 GB ram, 500 GB storage\n2. 1 DB server - 4 ...",
@@ -179,23 +242,21 @@
     "tags": []
   },
   {
-    "id": "prompt_1753488700743_2dd6c8g4a",
-    "name": "BOM for \\N\\N--- From Uploaded Document",
-    "description": "\\n\\n--- From uploaded document (prompt_sheet.xlsx) ---\\nundefined",
-    "category": "Data & Analytics",
-    "requirements": "\\n\\n--- From uploaded document (prompt_sheet.xlsx) ---\\nundefined",
+    "id": "prompt_1753557767600_1gha90wm2",
+    "name": "BOM for Database System",
+    "description": "\\n\\n--- Infrastructure Requirements from uploaded document ---\\n\\nCompute Requirements:\\n- Instances...",
+    "category": "E-commerce",
+    "requirements": "\\n\\n--- Infrastructure Requirements from uploaded document ---\\n\\nCompute Requirements:\\n- Instances needed: 6\\n- CPU cores per instance: 4\\n- Memory per instance: 60 GB\\n- Instance type: standard\\n\\nStorage Requirements:\\n- Block storage: 2136 GB\\n- Object storage: 500 GB\\n- File storage: 0 GB\\n\\nDatabase Requirements:\\n- Type: oracle\\n- Size: large\\n- Storage: 2136 GB\\n\\nNetwork Requirements:\\n- Load balancer needed: Yes\\n- Bandwidth: 1 Gbps\\n- VPN required: No\\n\\nSummary: Oracle database environment with 6 instances (mix of prod and test), running Oracle 11.2.0.4, total of 12 cores and 180GB RAM across instances. Storage requirements include 712GB per major instance. Production and test environments for EDW, BUSOB, FNC200, and HRB200 systems.\\n\n\nConsider these additional items:\n1. Do not consider any app servers.\n2. Consider Base Oracle Database Service SKU with BYOL",
     "followUpAnswers": {
-      "0": "See data in the uploaded excel",
-      "1": "See data in the uploaded excel",
+      "0": "None",
+      "1": "None",
       "2": "None",
-      "3": "Oracle",
-      "4": "None",
-      "5": "Ignore",
-      "6": "us-ashburn-1"
+      "3": "None",
+      "4": "None"
     },
     "llmProvider": "claude",
-    "createdAt": "2025-07-26T00:11:40.744Z",
-    "lastUsed": "2025-07-26T00:11:40.744Z",
+    "createdAt": "2025-07-26T19:22:47.600Z",
+    "lastUsed": "2025-07-26T19:22:47.600Z",
     "usageCount": 1,
     "tags": []
   }
