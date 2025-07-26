@@ -28,6 +28,12 @@ class LLMService {
       - Backup and disaster recovery needs
       - Regional/availability zone preferences
       
+      SMART ANALYSIS RULES:
+      1. If specific numbers are provided (e.g., "4 cores", "16 GB RAM", "100 GB storage"), use them directly
+      2. If document content contains structured data, prioritize that over asking follow-up questions
+      3. Only ask follow-up questions for truly missing critical information
+      4. Look for patterns like "2 servers with 4 cores each" and calculate total requirements
+      
       If information is missing or unclear, identify specific follow-up questions to ask.
       
       IMPORTANT: Respond with ONLY valid JSON. Do not include any explanatory text, markdown formatting, or anything other than the JSON object. Start your response with { and end with }. Required format: {"parsedRequirements": {...}, "needsFollowUp": boolean, "followUpQuestions": [...]}`,
@@ -269,28 +275,99 @@ Create a detailed BOM with realistic quantities and pricing calculations.`;
     }
   }
 
-  async parseDocumentContent(content, provider, documentType) {
-    const prompt = `
+  async parseDocumentContent(content, provider, documentType, infrastructureData = {}) {
+    const systemPrompt = `You are an expert at extracting technical infrastructure requirements from documents. 
+    Extract and structure the requirements in a format that can be directly used for Oracle Cloud Infrastructure BOM generation.
+    
+    IMPORTANT: Return ONLY valid JSON. Do not include any explanatory text, markdown formatting, or anything other than the JSON object.
+    
+    Required JSON format:
+    {
+      "compute": {
+        "instances": number,
+        "cores_per_instance": number,
+        "memory_per_instance_gb": number,
+        "instance_type": "standard|high_memory|gpu"
+      },
+      "storage": {
+        "block_storage_gb": number,
+        "object_storage_gb": number,
+        "file_storage_gb": number
+      },
+      "database": {
+        "type": "mysql|postgresql|oracle|none",
+        "size": "small|medium|large|xlarge",
+        "storage_gb": number
+      },
+      "network": {
+        "load_balancer": boolean,
+        "bandwidth_gbps": number,
+        "vpn_required": boolean
+      },
+      "security": {
+        "waf_required": boolean,
+        "backup_required": boolean,
+        "monitoring_required": boolean
+      },
+      "summary": "Brief summary of the infrastructure requirements"
+    }`;
+
+    const userPrompt = `
     Extract infrastructure requirements from this ${documentType} content:
     
-    ${content}
+    Content:
+    ${content.substring(0, 8000)} ${content.length > 8000 ? '... (truncated)' : ''}
     
-    Look for:
-    - Server/compute specifications
-    - Storage requirements
-    - Network/bandwidth needs
-    - Database requirements
-    - Security requirements
-    - Performance requirements
-    - Compliance needs
-    - Geographic/regional requirements
+    ${Object.keys(infrastructureData).length > 0 ? `
+    Pre-extracted data found:
+    - Compute: ${infrastructureData.compute || 'not specified'}
+    - Memory: ${infrastructureData.memory || 'not specified'}
+    - Storage: ${infrastructureData.storage || 'not specified'}
+    - Network: ${infrastructureData.network || 'not specified'}
+    - Instances: ${infrastructureData.instances || 'not specified'}
+    - Users: ${infrastructureData.users || 'not specified'}
     
-    Provide a structured summary of the infrastructure requirements found.
+    Use this pre-extracted data as hints but extract additional context from the full content.
+    ` : ''}
+    
+    Focus on:
+    1. Compute specifications (CPU cores, RAM, number of instances)
+    2. Storage requirements (block, object, file storage needs)
+    3. Database requirements (type, size, storage)
+    4. Network needs (bandwidth, load balancing, VPN)
+    5. Security requirements (WAF, backups, monitoring)
+    6. Performance and scalability requirements
+    7. Geographic/regional preferences
+    
+    Extract specific numbers and technical specifications wherever possible.
     `;
 
     try {
-      const response = await this.callLLM(provider, 'You are an expert at extracting technical requirements from documents.', prompt);
-      return response;
+      const response = await this.callLLM(provider, systemPrompt, userPrompt);
+      
+      // Parse and validate the JSON response
+      try {
+        const parsedResponse = JSON.parse(response);
+        return parsedResponse;
+      } catch (parseError) {
+        console.warn('LLM returned non-JSON response, attempting to extract JSON...');
+        
+        // Try to extract JSON from the response
+        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[0]);
+        }
+        
+        // Fallback: return the response as summary text
+        return {
+          compute: { instances: 0, cores_per_instance: 0, memory_per_instance_gb: 0, instance_type: "standard" },
+          storage: { block_storage_gb: 0, object_storage_gb: 0, file_storage_gb: 0 },
+          database: { type: "none", size: "small", storage_gb: 0 },
+          network: { load_balancer: false, bandwidth_gbps: 0, vpn_required: false },
+          security: { waf_required: false, backup_required: false, monitoring_required: false },
+          summary: response
+        };
+      }
     } catch (error) {
       console.error(`Error parsing document with ${provider}:`, error);
       throw new Error(`Failed to parse document: ${error.message}`);

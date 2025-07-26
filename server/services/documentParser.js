@@ -13,7 +13,8 @@ class DocumentParser {
       pdf: ['.pdf'],
       excel: ['.xlsx', '.xls'],
       word: ['.docx', '.doc'],
-      image: ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']
+      image: ['.jpg', '.jpeg', '.png', '.bmp', '.tiff'],
+      text: ['.txt']
     };
   }
 
@@ -38,6 +39,9 @@ class DocumentParser {
         case 'image':
           content = await this.parseImage(filePath);
           break;
+        case 'text':
+          content = await this.parseText(filePath);
+          break;
         default:
           throw new Error(`Unsupported file type: ${extension}`);
       }
@@ -45,16 +49,24 @@ class DocumentParser {
       // Clean up uploaded file
       await this.cleanupFile(filePath);
 
+      // Validate and sanitize content
+      const sanitizedContent = this.validateContent(content);
+
+      // Extract infrastructure keywords using regex patterns
+      const infrastructureData = this.extractInfrastructureKeywords(sanitizedContent);
+
       // Use LLM to extract structured requirements
       const structuredContent = await llmService.parseDocumentContent(
-        content, 
+        sanitizedContent, 
         llmProvider, 
-        documentType
+        documentType,
+        infrastructureData
       );
 
       return {
-        originalContent: content,
+        originalContent: sanitizedContent,
         structuredRequirements: structuredContent,
+        infrastructureData,
         documentType,
         filename: file.originalname
       };
@@ -120,6 +132,15 @@ class DocumentParser {
     }
   }
 
+  async parseText(filePath) {
+    try {
+      const content = await fs.readFile(filePath, 'utf8');
+      return content;
+    } catch (error) {
+      throw new Error(`Text file parsing failed: ${error.message}`);
+    }
+  }
+
   async parseImage(filePath) {
     try {
       // First, optimize the image for OCR
@@ -165,23 +186,58 @@ class DocumentParser {
   // Method to extract specific data patterns from parsed content
   extractInfrastructureKeywords(content) {
     const patterns = {
-      compute: /\\b(\\d+)\\s*(cpu|core|processor|vcpu)s?\\b/gi,
-      memory: /\\b(\\d+)\\s*(gb|mb|ram|memory)\\b/gi,
-      storage: /\\b(\\d+)\\s*(gb|tb|pb|storage|disk)\\b/gi,
-      network: /\\b(\\d+)\\s*(mbps|gbps|bandwidth)\\b/gi,
-      instances: /\\b(\\d+)\\s*(instance|server|vm|node)s?\\b/gi,
-      users: /\\b(\\d+)\\s*(user|concurrent|connection)s?\\b/gi
+      compute: [
+        /\\b(\\d+)\\s*(cpu|core|processor|vcpu|ocpu)s?\\b/gi,
+        /\\b(\\d+)\\s*x\\s*\\d+\\s*(core|cpu)s?\\b/gi,
+        /\\b(\\d+)\\s*(core|cpu)\\s*per\\s*(server|instance)\\b/gi
+      ],
+      memory: [
+        /\\b(\\d+)\\s*(gb|mb|ram|memory)\\b/gi,
+        /\\b(\\d+)\\s*gb\\s*ram\\b/gi,
+        /\\b(\\d+)\\s*gb\\s*memory\\b/gi,
+        /\\bmemory:\\s*(\\d+)\\s*gb\\b/gi
+      ],
+      storage: [
+        /\\b(\\d+)\\s*(gb|tb|pb|storage|disk)\\b/gi,
+        /\\bstorage:\\s*(\\d+)\\s*(gb|tb)\\b/gi,
+        /\\b(\\d+)\\s*(gb|tb)\\s*storage\\b/gi
+      ],
+      network: [
+        /\\b(\\d+)\\s*(mbps|gbps|bandwidth)\\b/gi,
+        /\\bbandwidth:\\s*(\\d+)\\s*(mbps|gbps)\\b/gi
+      ],
+      instances: [
+        /\\b(\\d+)\\s*(instance|server|vm|node|machine)s?\\b/gi,
+        /\\bnumber\\s*of\\s*(server|instance)s?:\\s*(\\d+)\\b/gi,
+        /\\b(\\d+)\\s*x\\s*(server|instance)\\b/gi
+      ],
+      users: [
+        /\\b(\\d+)\\s*(user|concurrent|connection)s?\\b/gi,
+        /\\b(\\d+)\\s*concurrent\\s*user\\b/gi,
+        /\\buser\\s*capacity:\\s*(\\d+)\\b/gi
+      ]
     };
 
     const extracted = {};
     
     Object.keys(patterns).forEach(key => {
-      const matches = content.match(patterns[key]);
-      if (matches) {
-        extracted[key] = matches.map(match => {
-          const numbers = match.match(/\\d+/g);
-          return numbers ? numbers[0] : null;
-        }).filter(Boolean);
+      const allMatches = [];
+      patterns[key].forEach(pattern => {
+        const matches = content.match(pattern);
+        if (matches) {
+          matches.forEach(match => {
+            const numbers = match.match(/\\d+/g);
+            if (numbers) {
+              allMatches.push(...numbers.map(n => parseInt(n)));
+            }
+          });
+        }
+      });
+      
+      if (allMatches.length > 0) {
+        // Remove duplicates and get unique values
+        const uniqueValues = [...new Set(allMatches)];
+        extracted[key] = uniqueValues.length === 1 ? uniqueValues : uniqueValues;
       }
     });
 

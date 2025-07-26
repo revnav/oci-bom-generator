@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import LLMSelector from '../components/LLMSelector';
 import RequirementsInput from '../components/RequirementsInput';
 import DocumentUpload from '../components/DocumentUpload';
+import ParsedDocumentDisplay from '../components/ParsedDocumentDisplay';
 import FollowUpQuestions from '../components/FollowUpQuestions';
 import LoadingSpinner from '../components/LoadingSpinner';
 import SavedPrompts from '../components/SavedPrompts';
@@ -81,12 +82,61 @@ const BOMGenerator = () => {
   // Document upload mutation
   const uploadMutation = useMutation(uploadDocument, {
     onSuccess: (data) => {
-      setUploadedDocument(data);
-      setRequirements(prev => {
-        const additionalContent = `\\n\\n--- From uploaded document (${data.filename}) ---\\n${data.structuredRequirements}`;
-        return prev + additionalContent;
-      });
-      toast.success(`Document "${data.filename}" parsed successfully`);
+      setUploadedDocument(data.content);
+      
+      // Enhanced requirements integration based on structured data
+      const structuredContent = data.content.structuredRequirements;
+      let additionalContent = '';
+      
+      if (structuredContent && typeof structuredContent === 'object') {
+        // Format structured requirements for better LLM understanding
+        const formatRequirements = (data) => {
+          let formatted = `\\n\\n--- Infrastructure Requirements from ${data.filename || 'uploaded document'} ---\\n`;
+          
+          if (data.compute) {
+            formatted += `\\nCompute Requirements:\\n`;
+            formatted += `- Instances needed: ${data.compute.instances || 'Not specified'}\\n`;
+            formatted += `- CPU cores per instance: ${data.compute.cores_per_instance || 'Not specified'}\\n`;
+            formatted += `- Memory per instance: ${data.compute.memory_per_instance_gb || 'Not specified'} GB\\n`;
+            formatted += `- Instance type: ${data.compute.instance_type || 'standard'}\\n`;
+          }
+          
+          if (data.storage) {
+            formatted += `\\nStorage Requirements:\\n`;
+            formatted += `- Block storage: ${data.storage.block_storage_gb || 0} GB\\n`;
+            formatted += `- Object storage: ${data.storage.object_storage_gb || 0} GB\\n`;
+            formatted += `- File storage: ${data.storage.file_storage_gb || 0} GB\\n`;
+          }
+          
+          if (data.database && data.database.type !== 'none') {
+            formatted += `\\nDatabase Requirements:\\n`;
+            formatted += `- Type: ${data.database.type}\\n`;
+            formatted += `- Size: ${data.database.size}\\n`;
+            formatted += `- Storage: ${data.database.storage_gb || 0} GB\\n`;
+          }
+          
+          if (data.network) {
+            formatted += `\\nNetwork Requirements:\\n`;
+            formatted += `- Load balancer needed: ${data.network.load_balancer ? 'Yes' : 'No'}\\n`;
+            formatted += `- Bandwidth: ${data.network.bandwidth_gbps || 0} Gbps\\n`;
+            formatted += `- VPN required: ${data.network.vpn_required ? 'Yes' : 'No'}\\n`;
+          }
+          
+          if (data.summary) {
+            formatted += `\\nSummary: ${data.summary}\\n`;
+          }
+          
+          return formatted;
+        };
+        
+        additionalContent = formatRequirements(structuredContent);
+      } else {
+        // Fallback for text-based structured requirements
+        additionalContent = `\\n\\n--- From uploaded document (${data.content.filename}) ---\\n${structuredContent}`;
+      }
+      
+      setRequirements(prev => prev + additionalContent);
+      toast.success(`Document "${data.content.filename}" parsed successfully`);
     },
     onError: (error) => {
       console.error('Document upload error:', error);
@@ -303,6 +353,14 @@ const BOMGenerator = () => {
 
         {/* Right Column - Input and Generation */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Parsed Document Display */}
+          {uploadedDocument && (
+            <ParsedDocumentDisplay 
+              parsedContent={uploadedDocument}
+              filename={uploadedDocument?.filename}
+            />
+          )}
+
           {/* Requirements Input */}
           <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">

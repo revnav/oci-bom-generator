@@ -1,0 +1,36 @@
+Infrastructure Requirements for E-commerce Platform
+
+We need a robust e-commerce platform with the following specifications:
+
+Compute Requirements:
+- 4 application servers
+- 8 CPU cores per server
+- 32 GB RAM per server
+- Standard instance type
+
+Storage Requirements:
+- 500 GB block storage for databases
+- 2 TB object storage for product images
+- 100 GB file storage for backups
+
+Database Requirements:
+- MySQL database
+- Large size configuration
+- 250 GB database storage
+- High availability required
+
+Network Requirements:
+- Load balancer required
+- 10 Gbps bandwidth
+- VPN required for admin access
+
+User Capacity:
+- Support for 50000 concurrent users
+- High performance requirements
+
+Additional Requirements:
+- Web Application Firewall needed
+- Automated backups required
+- 24/7 monitoring and alerting
+
+This platform should be able to handle peak traffic during sales events and provide excellent performance globally.
