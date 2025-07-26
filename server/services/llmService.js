@@ -75,7 +75,14 @@ class LLMService {
       
       Calculate realistic quantities based on requirements. Use the provided OCI services and their exact part numbers and pricing.
       
-      IMPORTANT: Respond with ONLY valid JSON. Do not include any explanatory text, markdown formatting, or anything other than the JSON object. Start your response with { and end with }.`
+      CRITICAL JSON FORMATTING RULES:
+      - Respond with ONLY valid JSON - no explanatory text, markdown, or code blocks
+      - Start response with { and end with }
+      - Use double quotes for all strings, never single quotes
+      - No trailing commas after the last property
+      - Escape special characters in strings (\\n for newlines, \\" for quotes)
+      - Numbers should not be quoted
+      - Boolean values should be true/false (not quoted)`
     };
   }
 
@@ -210,9 +217,37 @@ Create a detailed BOM with realistic quantities and pricing calculations.`;
       let cleanedJson = jsonString
         .replace(/,\s*}/g, '}')  // Remove trailing commas in objects
         .replace(/,\s*]/g, ']')  // Remove trailing commas in arrays
-        .replace(/([{,]\s*)(\w+):/g, '$1"$2":'); // Quote unquoted keys
+        .replace(/([{,]\s*)(\w+):/g, '$1"$2":')  // Quote unquoted keys
+        .replace(/:\s*([^",{\[\]}\s][^",}\]]*[^",}\]\s])\s*([,}])/g, ': "$1"$2')  // Quote unquoted string values
+        .replace(/'\s*([^']*)\s*'/g, '"$1"')  // Replace single quotes with double quotes
+        .replace(/\n/g, '\\n')  // Escape newlines
+        .replace(/\t/g, '\\t')  // Escape tabs
+        .replace(/\r/g, '\\r');  // Escape carriage returns
       
-      const parsedResult = JSON.parse(cleanedJson);
+      console.log(`🧹 Cleaned JSON preview:`, cleanedJson.substring(0, 300) + '...');
+      
+      let parsedResult;
+      try {
+        parsedResult = JSON.parse(cleanedJson);
+      } catch (parseError) {
+        console.error(`❌ JSON Parse Error at position ${parseError.message}:`, parseError.message);
+        console.error('🔍 JSON around error position:', 
+          cleanedJson.substring(Math.max(0, 1245 - 50), 1245 + 50)
+        );
+        
+        // Try a more aggressive cleaning approach
+        console.log('🔧 Attempting more aggressive JSON cleaning...');
+        let aggressiveClean = jsonString
+          .replace(/[\n\r\t]/g, ' ')  // Replace all whitespace with spaces
+          .replace(/,\s*([}\]])/g, '$1')  // Remove trailing commas
+          .replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":')  // Quote keys
+          .replace(/:\s*([^",{\[\]}\s][^",}\]]*)\s*([,}])/g, ': "$1"$2')  // Quote values
+          .replace(/'/g, '"')  // Replace single quotes
+          .replace(/\s+/g, ' ')  // Normalize whitespace
+          .trim();
+          
+        parsedResult = JSON.parse(aggressiveClean);
+      }
       console.log('✅ LLM BOM generation successful. Items count:', parsedResult.items?.length || 0);
       
       // Validate the structure
