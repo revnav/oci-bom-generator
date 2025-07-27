@@ -89,14 +89,33 @@ class LLMService {
 
       bomGeneration: `You are creating a detailed Bill of Materials (BOM) for Oracle Cloud Infrastructure services.
       
-      CRITICAL USER CONSTRAINT ENFORCEMENT:
-      1. ALWAYS respect user-specified constraints and limitations
-      2. If user specifies "only consider X", include ONLY X-related services
-      3. If user provides specific SKUs or part numbers, use ONLY those SKUs
-      4. If user says "exclude Y", do NOT include any Y-related services
-      5. DO NOT expand scope beyond user-defined constraints
-      6. DO NOT add "recommended" or "alternative" services outside constraints
-      7. Validate each item against user constraints before inclusion
+      ⚠️ CRITICAL USER CONSTRAINT ENFORCEMENT - ZERO TOLERANCE POLICY ⚠️
+      
+      MANDATORY VALIDATION BEFORE ADDING ANY ITEM TO BOM:
+      1. Check if item name contains ANY prohibited keywords from exclusions
+      2. Check if item category matches restriction criteria
+      3. Check if SKU/part number is explicitly allowed when restrictions exist
+      4. If user says "only consider X", REJECT anything that doesn't match X
+      5. If user says "do not consider Y", REJECT anything containing Y keywords
+      6. If user provides specific SKUs, REJECT all other SKUs
+      
+      PATTERN RECOGNITION FOR CONSTRAINTS:
+      - "only consider Oracle Base Database" → REJECT Exadata, MySQL, NoSQL, Autonomous
+      - "do not consider app servers" → REJECT compute instances, application servers
+      - "BYOL only" → REJECT license-included services
+      - "specific SKU B88317" → REJECT all other SKUs
+      
+      CONSTRAINT INHERITANCE RULES:
+      - Sub-products and variants of prohibited items are ALSO prohibited
+      - If "Oracle Database" is excluded, then "Oracle Exadata" is also excluded
+      - If "compute" is excluded, then "compute instances", "VM", "bare metal" are excluded
+      
+      FINAL VERIFICATION CHECKLIST - MANDATORY:
+      ✓ Every BOM item validated against ALL constraints
+      ✓ No prohibited keywords in service names/categories
+      ✓ No excluded service types included
+      ✓ Only approved SKUs when restrictions specified
+      ✓ Explanation provided for each inclusion decision
       
       CRITICAL CALCULATION RULES:
       1. Respect Oracle-specific sizing ratios (e.g., ECPUs vs cores)
@@ -223,6 +242,72 @@ class LLMService {
     const serviceCategory = service.serviceCategory?.toLowerCase() || '';
     const partNumber = service.partNumber?.toLowerCase() || '';
     const skuType = service.skuType?.toLowerCase() || '';
+    
+    // Enhanced pattern blocking for specific constraint violations
+    const fullServiceText = `${serviceName} ${serviceCategory} ${partNumber} ${skuType}`.toLowerCase();
+    
+    // Check for prohibited patterns first - these are STRICT exclusions
+    const prohibitedPatterns = [
+      { pattern: /exadata|exascale/i, description: 'Exadata/Exascale services' },
+      { pattern: /autonomous.*database/i, description: 'Autonomous Database services' },
+      { pattern: /mysql|nosql|json/i, description: 'Non-Oracle Database services' },
+      { pattern: /compute.*instance|vm.*instance|bare.*metal/i, description: 'Compute/VM instances' },
+      { pattern: /application.*server|app.*server/i, description: 'Application server services' }
+    ];
+    
+    // If user has exclusions, check against prohibited patterns
+    if (constraints.exclusions?.length > 0) {
+      for (const exclusion of constraints.exclusions) {
+        const exclusionText = exclusion.instruction.toLowerCase();
+        
+        // Check if exclusion mentions app servers and this service is compute-related
+        if (exclusionText.includes('app server') && 
+            (fullServiceText.includes('compute') || fullServiceText.includes('instance') || fullServiceText.includes('vm'))) {
+          return {
+            allowed: false,
+            reason: `Service excluded: matches 'app server' prohibition - ${serviceName}`
+          };
+        }
+      }
+    }
+    
+    // If user has restrictive constraints (only consider X), be very strict
+    if (constraints.restrictive?.length > 0) {
+      for (const restriction of constraints.restrictive) {
+        const restrictionText = restriction.instruction.toLowerCase();
+        
+        // Special handling for "only consider Oracle Base Database Service"
+        if (restrictionText.includes('base') && restrictionText.includes('database')) {
+          // REJECT anything that's not specifically base database service
+          if (fullServiceText.includes('exadata') || fullServiceText.includes('exascale') || 
+              fullServiceText.includes('autonomous') || fullServiceText.includes('mysql') ||
+              fullServiceText.includes('nosql') || fullServiceText.includes('json')) {
+            return {
+              allowed: false,
+              reason: `Service violates 'only Base Database' constraint: ${serviceName} contains excluded database type`
+            };
+          }
+          
+          // Only allow if it's clearly database-related AND not excluded types
+          if (!fullServiceText.includes('database') && !fullServiceText.includes('db ')) {
+            return {
+              allowed: false,
+              reason: `Service doesn't match 'only Base Database' constraint: ${serviceName} is not a database service`
+            };
+          }
+        }
+        
+        // Handle BYOL requirements
+        if (restrictionText.includes('byol')) {
+          if (!fullServiceText.includes('byol') && !fullServiceText.includes('bring your own license')) {
+            return {
+              allowed: false,
+              reason: `Service doesn't meet BYOL requirement: ${serviceName}`
+            };
+          }
+        }
+      }
+    }
     
     // If specific SKUs are required, only allow those
     if (constraints.specificSkus.length > 0) {
@@ -519,19 +604,28 @@ ${JSON.stringify(userConstraints, null, 2)}`;
     });
 
     const constraintsText = userConstraints && Object.keys(userConstraints).length > 0 
-      ? `\n\nCRITICAL USER CONSTRAINTS - MUST BE RESPECTED:\n${JSON.stringify(userConstraints, null, 2)}\n\nONLY include services that meet these constraints. DO NOT add any services outside these constraints.`
+      ? `\n\n🚨 CRITICAL USER CONSTRAINTS - ZERO TOLERANCE ENFORCEMENT 🚨\n${JSON.stringify(userConstraints, null, 2)}\n\n⚠️ MANDATORY CHECKS BEFORE ADDING ANY SERVICE:\n1. Does service name contain EXADATA or EXASCALE? → REJECT\n2. Does service name contain AUTONOMOUS? → REJECT\n3. Is this a compute/VM instance when app servers prohibited? → REJECT\n4. Does service meet BYOL requirement if specified? → VALIDATE\n5. Is service in allowed SKU list if restrictions exist? → VALIDATE\n\nONLY include services that pass ALL constraint checks. DO NOT add any services outside these constraints.`
       : '';
     
     const prompt = `Requirements Summary: ${JSON.stringify(parsedRequirements)}${constraintsText}
     
-Available OCI Services (${limitedServices.length} services - already filtered by constraints):
+Available OCI Services (${limitedServices.length} services - PRE-FILTERED by constraints):
 ${limitedServices.map(s => {
       const price = s.pricing.unitPrice || s.pricing.price || 0.05;
       const unit = s.pricing.unit || s.metric || 'HOUR';
       return `- ${s.partNumber}: ${s.name} (${s.category}) - Metric: ${s.metric} - Price: $${price}/${unit}`;
     }).join('\n')}
 
-Create a detailed BOM with realistic quantities and pricing calculations. IMPORTANT: Only use services from the above filtered list that meet the user constraints.`;
+🎯 FINAL INSTRUCTION: Create BOM using ONLY services from the above PRE-FILTERED list. Each service has already passed constraint validation. Do NOT substitute or add alternative services not in this list.
+
+FORBIDDEN SERVICES (if constraints active):
+- Oracle Exadata (any variant)
+- Oracle Exascale Database
+- Autonomous Database services
+- Compute instances (if app servers prohibited)
+- Non-BYOL services (if BYOL required)
+
+Create detailed BOM with realistic quantities. Use ONLY the pre-filtered services above.`;
 
     // Check approximate token count (rough estimate: 1 token ≈ 4 characters)
     const estimatedTokens = (this.systemPrompts.bomGeneration.length + prompt.length) / 4;
@@ -651,7 +745,39 @@ Create a detailed BOM with realistic quantities and pricing calculations. IMPORT
           });
         }
         
-        parsedResult.items = validatedItems;
+        // Additional AGGRESSIVE post-processing validation for specific constraint violations
+        console.log('🔥 Applying AGGRESSIVE constraint enforcement...');
+        const finalFilteredItems = validatedItems.filter(item => {
+          const itemText = `${item.description || ''} ${item.displayName || ''} ${item.sku || ''}`.toLowerCase();
+          
+          // Check for specific constraint violations based on the user's example
+          if (userConstraints.restrictive?.some(r => r.instruction.toLowerCase().includes('base') && r.instruction.toLowerCase().includes('database'))) {
+            // User wants ONLY Base Database Service
+            if (itemText.includes('exadata') || itemText.includes('exascale') || 
+                itemText.includes('autonomous') || itemText.includes('mysql') ||
+                itemText.includes('nosql')) {
+              console.log(`🔥 AGGRESSIVE FILTER: Removing ${item.sku} - ${item.description} (violates 'only Base Database' constraint)`);
+              return false;
+            }
+          }
+          
+          if (userConstraints.exclusions?.some(e => e.instruction.toLowerCase().includes('app server'))) {
+            // User explicitly excluded app servers
+            if (itemText.includes('compute') || itemText.includes('instance') || 
+                itemText.includes('vm') || itemText.includes('ocpu')) {
+              console.log(`🔥 AGGRESSIVE FILTER: Removing ${item.sku} - ${item.description} (violates 'no app servers' constraint)`);
+              return false;
+            }
+          }
+          
+          return true;
+        });
+        
+        if (finalFilteredItems.length !== validatedItems.length) {
+          console.log(`🔥 AGGRESSIVE FILTER: Removed ${validatedItems.length - finalFilteredItems.length} additional items`);
+        }
+        
+        parsedResult.items = finalFilteredItems;
         
         // Add constraint compliance information
         parsedResult.constraintCompliance = {
