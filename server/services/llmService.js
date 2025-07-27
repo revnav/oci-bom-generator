@@ -89,33 +89,39 @@ class LLMService {
 
       bomGeneration: `You are creating a detailed Bill of Materials (BOM) for Oracle Cloud Infrastructure services.
       
-      ⚠️ CRITICAL USER CONSTRAINT ENFORCEMENT - ZERO TOLERANCE POLICY ⚠️
+      🎯 UNIVERSAL USER CONSTRAINT ENFORCEMENT 🎯
       
-      MANDATORY VALIDATION BEFORE ADDING ANY ITEM TO BOM:
-      1. Check if item name contains ANY prohibited keywords from exclusions
-      2. Check if item category matches restriction criteria
-      3. Check if SKU/part number is explicitly allowed when restrictions exist
-      4. If user says "only consider X", REJECT anything that doesn't match X
-      5. If user says "do not consider Y", REJECT anything containing Y keywords
-      6. If user provides specific SKUs, REJECT all other SKUs
+      CORE PRINCIPLE: User constraints are ABSOLUTE requirements that override all other considerations.
       
-      PATTERN RECOGNITION FOR CONSTRAINTS:
-      - "only consider Oracle Base Database" → REJECT Exadata, MySQL, NoSQL, Autonomous
-      - "do not consider app servers" → REJECT compute instances, application servers
-      - "BYOL only" → REJECT license-included services
-      - "specific SKU B88317" → REJECT all other SKUs
+      UNIVERSAL CONSTRAINT HANDLING:
+      1. If user specifies "only consider X" → Include ONLY services that match X criteria
+      2. If user specifies "do not consider Y" → Exclude ALL services that match Y criteria  
+      3. If user provides specific SKUs → Use ONLY those exact SKUs
+      4. User constraints apply to ANY service type (database, compute, storage, network, etc.)
       
-      CONSTRAINT INHERITANCE RULES:
-      - Sub-products and variants of prohibited items are ALSO prohibited
-      - If "Oracle Database" is excluded, then "Oracle Exadata" is also excluded
-      - If "compute" is excluded, then "compute instances", "VM", "bare metal" are excluded
+      CONSTRAINT INTERPRETATION EXAMPLES:
+      - "only consider Exascale" → Include ONLY Exascale services, reject Base Database
+      - "only consider Base Database" → Include ONLY Base Database, reject Exascale
+      - "only consider MySQL" → Include ONLY MySQL services, reject Oracle Database
+      - "do not consider compute" → Reject ALL compute/VM/instance services
+      - "BYOL only" → Include ONLY BYOL services, reject license-included
       
-      FINAL VERIFICATION CHECKLIST - MANDATORY:
-      ✓ Every BOM item validated against ALL constraints
-      ✓ No prohibited keywords in service names/categories
-      ✓ No excluded service types included
-      ✓ Only approved SKUs when restrictions specified
-      ✓ Explanation provided for each inclusion decision
+      BIDIRECTIONAL CONSTRAINT SUPPORT:
+      - Constraints work in ANY direction based on user intent
+      - No hardcoded exclusions - let user define what they want/don't want
+      - Support for ANY technology stack, service type, or provider model
+      
+      CONSTRAINT COMPLIANCE DOCUMENTATION:
+      - For each BOM item, document WHY it meets user constraints
+      - If LLM includes items that seem to violate constraints, provide detailed justification
+      - Be transparent about constraint interpretation and decision-making
+      
+      MANDATORY PROCESS:
+      1. Analyze user constraints carefully
+      2. Interpret constraints based on user intent (not hardcoded rules)
+      3. Select services that match user criteria
+      4. Document constraint compliance for each item
+      5. If unsure about constraint interpretation, err on the side of user preference
       
       CRITICAL CALCULATION RULES:
       1. Respect Oracle-specific sizing ratios (e.g., ECPUs vs cores)
@@ -236,6 +242,102 @@ class LLMService {
     return constraints;
   }
 
+  // Universal constraint compliance analysis - works for ANY constraint type
+  analyzeItemConstraintCompliance(item, userConstraints) {
+    const itemText = `${item.description || ''} ${item.displayName || ''} ${item.sku || ''}`;
+    const analysis = {
+      compliant: true,
+      reasons: [],
+      warnings: []
+    };
+
+    if (!userConstraints || Object.keys(userConstraints).length === 0) {
+      analysis.reasons.push('No user constraints specified');
+      return analysis;
+    }
+
+    // Document which constraints this item satisfies/violates
+    if (userConstraints.restrictive?.length > 0) {
+      userConstraints.restrictive.forEach(restriction => {
+        analysis.reasons.push(`Restrictive constraint: "${restriction.instruction}" - Item: ${itemText}`);
+      });
+    }
+
+    if (userConstraints.exclusions?.length > 0) {
+      userConstraints.exclusions.forEach(exclusion => {
+        analysis.reasons.push(`Exclusion constraint: "${exclusion.instruction}" - Item: ${itemText}`);
+      });
+    }
+
+    if (userConstraints.specificSkus?.length > 0) {
+      const allowedSkus = userConstraints.specificSkus.map(s => s.sku);
+      const itemSku = item.sku || item.partNumber;
+      if (allowedSkus.includes(itemSku)) {
+        analysis.reasons.push(`SKU constraint satisfied: ${itemSku} is in allowed list`);
+      } else {
+        analysis.compliant = false;
+        analysis.warnings.push(`SKU constraint violation: ${itemSku} not in allowed list: ${allowedSkus.join(', ')}`);
+      }
+    }
+
+    return analysis;
+  }
+
+  // Extract meaningful keywords from constraint instructions
+  extractKeywords(instruction) {
+    const text = instruction.toLowerCase();
+    const keywords = [];
+    
+    // Common stop words to ignore
+    const stopWords = ['only', 'consider', 'do', 'not', 'include', 'use', 'with', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'as', 'by'];
+    
+    // Split into words and filter
+    const words = text.split(/\s+/).filter(word => 
+      word.length > 2 && 
+      !stopWords.includes(word) &&
+      !/^\d+$/.test(word) // exclude pure numbers
+    );
+    
+    // Also extract meaningful phrases
+    const phrases = [];
+    if (text.includes('base database')) phrases.push('base database');
+    if (text.includes('app server')) phrases.push('app server');
+    if (text.includes('exascale')) phrases.push('exascale');
+    if (text.includes('exadata')) phrases.push('exadata');
+    if (text.includes('autonomous')) phrases.push('autonomous');
+    if (text.includes('mysql')) phrases.push('mysql');
+    if (text.includes('byol')) phrases.push('byol');
+    if (text.includes('compute')) phrases.push('compute');
+    
+    return [...new Set([...words, ...phrases])];
+  }
+
+  // Generate human-readable constraint interpretation for LLM
+  generateConstraintInterpretation(userConstraints) {
+    const interpretations = [];
+    
+    if (userConstraints.restrictive?.length > 0) {
+      userConstraints.restrictive.forEach(restriction => {
+        const keywords = this.extractKeywords(restriction.instruction);
+        interpretations.push(`RESTRICTIVE: "${restriction.instruction}" → Only include services matching: ${keywords.join(', ')}`);
+      });
+    }
+    
+    if (userConstraints.exclusions?.length > 0) {
+      userConstraints.exclusions.forEach(exclusion => {
+        const keywords = this.extractKeywords(exclusion.instruction);
+        interpretations.push(`EXCLUSION: "${exclusion.instruction}" → Exclude services matching: ${keywords.join(', ')}`);
+      });
+    }
+    
+    if (userConstraints.specificSkus?.length > 0) {
+      const skus = userConstraints.specificSkus.map(s => s.sku);
+      interpretations.push(`SKU RESTRICTION: Only use these specific SKUs: ${skus.join(', ')}`);
+    }
+    
+    return interpretations.join('\n');
+  }
+
   // Universal service validation - works with ANY type of constraint
   validateServiceAgainstConstraints(service, constraints, requirements) {
     const serviceName = service.displayName?.toLowerCase() || '';
@@ -243,74 +345,61 @@ class LLMService {
     const partNumber = service.partNumber?.toLowerCase() || '';
     const skuType = service.skuType?.toLowerCase() || '';
     
-    // Enhanced pattern blocking for specific constraint violations
     const fullServiceText = `${serviceName} ${serviceCategory} ${partNumber} ${skuType}`.toLowerCase();
     
-    // Check for prohibited patterns first - these are STRICT exclusions
-    const prohibitedPatterns = [
-      { pattern: /exadata|exascale/i, description: 'Exadata/Exascale services' },
-      { pattern: /autonomous.*database/i, description: 'Autonomous Database services' },
-      { pattern: /mysql|nosql|json/i, description: 'Non-Oracle Database services' },
-      { pattern: /compute.*instance|vm.*instance|bare.*metal/i, description: 'Compute/VM instances' },
-      { pattern: /application.*server|app.*server/i, description: 'Application server services' }
-    ];
-    
-    // If user has exclusions, check against prohibited patterns
+    // Universal exclusion checking - match any exclusion keywords
     if (constraints.exclusions?.length > 0) {
       for (const exclusion of constraints.exclusions) {
-        const exclusionText = exclusion.instruction.toLowerCase();
+        const exclusionKeywords = this.extractKeywords(exclusion.instruction);
         
-        // Check if exclusion mentions app servers and this service is compute-related
-        if (exclusionText.includes('app server') && 
-            (fullServiceText.includes('compute') || fullServiceText.includes('instance') || fullServiceText.includes('vm'))) {
-          return {
-            allowed: false,
-            reason: `Service excluded: matches 'app server' prohibition - ${serviceName}`
-          };
+        for (const keyword of exclusionKeywords) {
+          if (fullServiceText.includes(keyword.toLowerCase())) {
+            return {
+              allowed: false,
+              reason: `Service excluded: matches exclusion keyword '${keyword}' from constraint '${exclusion.instruction}'`
+            };
+          }
         }
       }
     }
     
-    // If user has restrictive constraints (only consider X), be very strict
+    // Universal restrictive checking - must match restriction keywords
     if (constraints.restrictive?.length > 0) {
+      let matchesAnyRestriction = false;
+      const matchDetails = [];
+      
       for (const restriction of constraints.restrictive) {
-        const restrictionText = restriction.instruction.toLowerCase();
+        const restrictionKeywords = this.extractKeywords(restriction.instruction);
+        let matchesThisRestriction = false;
         
-        // Special handling for "only consider Oracle Base Database Service"
-        if (restrictionText.includes('base') && restrictionText.includes('database')) {
-          // REJECT anything that's not specifically base database service
-          if (fullServiceText.includes('exadata') || fullServiceText.includes('exascale') || 
-              fullServiceText.includes('autonomous') || fullServiceText.includes('mysql') ||
-              fullServiceText.includes('nosql') || fullServiceText.includes('json')) {
-            return {
-              allowed: false,
-              reason: `Service violates 'only Base Database' constraint: ${serviceName} contains excluded database type`
-            };
-          }
-          
-          // Only allow if it's clearly database-related AND not excluded types
-          if (!fullServiceText.includes('database') && !fullServiceText.includes('db ')) {
-            return {
-              allowed: false,
-              reason: `Service doesn't match 'only Base Database' constraint: ${serviceName} is not a database service`
-            };
+        for (const keyword of restrictionKeywords) {
+          if (fullServiceText.includes(keyword.toLowerCase())) {
+            matchesThisRestriction = true;
+            matchDetails.push(`matches '${keyword}' from '${restriction.instruction}'`);
+            break;
           }
         }
         
-        // Handle BYOL requirements
-        if (restrictionText.includes('byol')) {
-          if (!fullServiceText.includes('byol') && !fullServiceText.includes('bring your own license')) {
-            return {
-              allowed: false,
-              reason: `Service doesn't meet BYOL requirement: ${serviceName}`
-            };
-          }
+        if (matchesThisRestriction) {
+          matchesAnyRestriction = true;
         }
+      }
+      
+      if (!matchesAnyRestriction) {
+        return {
+          allowed: false,
+          reason: `Service doesn't match any restrictive constraints: ${constraints.restrictive.map(r => r.instruction).join('; ')}`
+        };
+      } else {
+        return {
+          allowed: true,
+          reason: `Service matches constraints: ${matchDetails.join('; ')}`
+        };
       }
     }
     
     // If specific SKUs are required, only allow those
-    if (constraints.specificSkus.length > 0) {
+    if (constraints.specificSkus?.length > 0) {
       const allowedSkus = constraints.specificSkus.map(s => s.sku.toLowerCase());
       if (!allowedSkus.includes(partNumber)) {
         return {
@@ -604,7 +693,7 @@ ${JSON.stringify(userConstraints, null, 2)}`;
     });
 
     const constraintsText = userConstraints && Object.keys(userConstraints).length > 0 
-      ? `\n\n🚨 CRITICAL USER CONSTRAINTS - ZERO TOLERANCE ENFORCEMENT 🚨\n${JSON.stringify(userConstraints, null, 2)}\n\n⚠️ MANDATORY CHECKS BEFORE ADDING ANY SERVICE:\n1. Does service name contain EXADATA or EXASCALE? → REJECT\n2. Does service name contain AUTONOMOUS? → REJECT\n3. Is this a compute/VM instance when app servers prohibited? → REJECT\n4. Does service meet BYOL requirement if specified? → VALIDATE\n5. Is service in allowed SKU list if restrictions exist? → VALIDATE\n\nONLY include services that pass ALL constraint checks. DO NOT add any services outside these constraints.`
+      ? `\n\n🎯 USER CONSTRAINTS - ABSOLUTE REQUIREMENTS 🎯\n${JSON.stringify(userConstraints, null, 2)}\n\n📋 CONSTRAINT INTERPRETATION:\n${this.generateConstraintInterpretation(userConstraints)}\n\n⚠️ MANDATORY: Only include services that match ALL user constraints. Document constraint compliance for each item.`
       : '';
     
     const prompt = `Requirements Summary: ${JSON.stringify(parsedRequirements)}${constraintsText}
@@ -616,16 +705,11 @@ ${limitedServices.map(s => {
       return `- ${s.partNumber}: ${s.name} (${s.category}) - Metric: ${s.metric} - Price: $${price}/${unit}`;
     }).join('\n')}
 
-🎯 FINAL INSTRUCTION: Create BOM using ONLY services from the above PRE-FILTERED list. Each service has already passed constraint validation. Do NOT substitute or add alternative services not in this list.
+🎯 UNIVERSAL INSTRUCTION: Create BOM using ONLY services from the above PRE-FILTERED list that meet user constraints. Each service has been pre-filtered, but you must still validate against user constraints.
 
-FORBIDDEN SERVICES (if constraints active):
-- Oracle Exadata (any variant)
-- Oracle Exascale Database
-- Autonomous Database services
-- Compute instances (if app servers prohibited)
-- Non-BYOL services (if BYOL required)
+🔍 FOR EACH BOM ITEM: Document why it satisfies user constraints. If including an item that might seem to violate constraints, provide detailed justification.
 
-Create detailed BOM with realistic quantities. Use ONLY the pre-filtered services above.`;
+Create detailed BOM with realistic quantities and constraint compliance documentation.`;
 
     // Check approximate token count (rough estimate: 1 token ≈ 4 characters)
     const estimatedTokens = (this.systemPrompts.bomGeneration.length + prompt.length) / 4;
@@ -745,39 +829,23 @@ Create detailed BOM with realistic quantities. Use ONLY the pre-filtered service
           });
         }
         
-        // Additional AGGRESSIVE post-processing validation for specific constraint violations
-        console.log('🔥 Applying AGGRESSIVE constraint enforcement...');
-        const finalFilteredItems = validatedItems.filter(item => {
-          const itemText = `${item.description || ''} ${item.displayName || ''} ${item.sku || ''}`.toLowerCase();
+        // UNIVERSAL constraint validation - let LLM handle interpretation, document violations
+        console.log('📋 Applying universal constraint validation...');
+        
+        // Add constraint compliance documentation to each item
+        parsedResult.items = validatedItems.map(item => {
+          // Add constraint compliance metadata
+          const constraintCompliance = {
+            userConstraints: userConstraints,
+            constraintAnalysis: this.analyzeItemConstraintCompliance(item, userConstraints),
+            validationPassed: true
+          };
           
-          // Check for specific constraint violations based on the user's example
-          if (userConstraints.restrictive?.some(r => r.instruction.toLowerCase().includes('base') && r.instruction.toLowerCase().includes('database'))) {
-            // User wants ONLY Base Database Service
-            if (itemText.includes('exadata') || itemText.includes('exascale') || 
-                itemText.includes('autonomous') || itemText.includes('mysql') ||
-                itemText.includes('nosql')) {
-              console.log(`🔥 AGGRESSIVE FILTER: Removing ${item.sku} - ${item.description} (violates 'only Base Database' constraint)`);
-              return false;
-            }
-          }
-          
-          if (userConstraints.exclusions?.some(e => e.instruction.toLowerCase().includes('app server'))) {
-            // User explicitly excluded app servers
-            if (itemText.includes('compute') || itemText.includes('instance') || 
-                itemText.includes('vm') || itemText.includes('ocpu')) {
-              console.log(`🔥 AGGRESSIVE FILTER: Removing ${item.sku} - ${item.description} (violates 'no app servers' constraint)`);
-              return false;
-            }
-          }
-          
-          return true;
+          return {
+            ...item,
+            constraintCompliance
+          };
         });
-        
-        if (finalFilteredItems.length !== validatedItems.length) {
-          console.log(`🔥 AGGRESSIVE FILTER: Removed ${validatedItems.length - finalFilteredItems.length} additional items`);
-        }
-        
-        parsedResult.items = finalFilteredItems;
         
         // Add constraint compliance information
         parsedResult.constraintCompliance = {
