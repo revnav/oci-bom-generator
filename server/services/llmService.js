@@ -591,9 +591,9 @@ ${JSON.stringify(userConstraints, null, 2)}`;
     // Filter services based on user constraints BEFORE sending to LLM
     let filteredServices = ociServices;
     
-    if (userConstraints && (userConstraints.restrictive?.length > 0 || userConstraints.specificSkus?.length > 0 || userConstraints.exclusions?.length > 0)) {
-      console.log('🔍 Applying user constraints to filter OCI services...');
-      console.log('📋 User constraints:', JSON.stringify(userConstraints, null, 2));
+    if (userConstraints && (userConstraints.businessRequirements?.length > 0 || userConstraints.specificSkus?.length > 0 || userConstraints.exclusions?.length > 0)) {
+      console.log('🔍 Applying customer preferences to filter Oracle services...');
+      console.log('📋 Customer requirements:', JSON.stringify(userConstraints, null, 2));
       
       filteredServices = ociServices.filter(service => {
         const validation = this.validateServiceAgainstConstraints(service, userConstraints, parsedRequirements);
@@ -607,7 +607,7 @@ ${JSON.stringify(userConstraints, null, 2)}`;
         return validation.allowed;
       });
       
-      console.log(`📊 Services filtered from ${ociServices.length} to ${filteredServices.length} based on constraints`);
+      console.log(`📊 Oracle services filtered from ${ociServices.length} to ${filteredServices.length} based on customer preferences`);
     }
     
     // Create a more concise prompt to avoid token limits
@@ -653,8 +653,8 @@ ${JSON.stringify(userConstraints, null, 2)}`;
 
     // Ensure we have at least some services available
     if (essentialServices.length === 0) {
-      console.warn('⚠️ No services with valid pricing found after filtering');
-      console.log('🔄 Falling back to use all filtered services with basic pricing');
+      console.warn('⚠️ No Oracle services with valid pricing found after applying customer filters');
+      console.log('🔄 Using fallback pricing for customer presentation');
       
       // Fallback: use filtered services with default pricing structure
       const fallbackServices = filteredServices.slice(0, 10).map(service => ({
@@ -797,7 +797,7 @@ Create detailed BOM with realistic quantities and constraint compliance document
       
       // Final validation against user constraints
       const userConstraints = parsedRequirements.userConstraints || {};
-      if (userConstraints && (userConstraints.restrictive?.length > 0 || userConstraints.specificSkus?.length > 0 || userConstraints.exclusions?.length > 0)) {
+      if (userConstraints && (userConstraints.businessRequirements?.length > 0 || userConstraints.specificSkus?.length > 0 || userConstraints.exclusions?.length > 0)) {
         console.log('🔎 Final validation of BOM items against user constraints...');
         
         const validatedItems = [];
@@ -861,13 +861,13 @@ Create detailed BOM with realistic quantities and constraint compliance document
       
       return parsedResult;
     } catch (error) {
-      console.error(`❌ Error generating BOM with ${provider}:`, error.message);
+      console.log(`❌ Error creating customer BOM with ${provider}:`, error.message);
       if (response) {
-        console.error('📄 Full raw response for debugging:', response);
+        console.error('📄 Full response for debugging:', response);
       } else {
-        console.error('❌ No response received from LLM');
+        console.error('❌ No response received from AI service');
       }
-      throw new Error(`Failed to generate BOM: ${error.message}`);
+      throw new Error(`Failed to create customer BOM: ${error.message}`);
     }
   }
 
