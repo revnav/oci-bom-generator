@@ -1,5 +1,102 @@
 [
   {
+    "id": "prompt_1753637763625_lnrjsli72",
+    "name": "BOM for Database System",
+    "description": "\\n\\n--- Infrastructure Requirements from uploaded document ---\\n\\nCompute Requirements:\\n- Instances...",
+    "category": "E-commerce",
+    "requirements": "\\n\\n--- Infrastructure Requirements from uploaded document ---\\n\\nCompute Requirements:\\n- Instances needed: 6\\n- CPU cores per instance: 4\\n- Memory per instance: 60 GB\\n- Instance type: standard\\n\\nStorage Requirements:\\n- Block storage: 2136 GB\\n- Object storage: 500 GB\\n- File storage: 0 GB\\n\\nDatabase Requirements:\\n- Type: oracle\\n- Size: large\\n- Storage: 2136 GB\\n\\nNetwork Requirements:\\n- Load balancer needed: Yes\\n- Bandwidth: 1 Gbps\\n- VPN required: No\\n\\nSummary: Oracle database environment with 6 instances (mix of prod and test), running Oracle 11.2.0.4, total of 12 cores and 180GB RAM across instances. Storage requirements include 712GB per major instance. Production and test environments for EDW, BUSOB, FNC200, and HRB200 systems.\\n\n\nConsider these additional items:\n1. Do not consider any app servers.\n2. Only Consider Base Oracle Database Service SKU with BYOL",
+    "followUpAnswers": {
+      "0": "2 test, 4 prod",
+      "1": "none",
+      "2": "none",
+      "3": "none"
+    },
+    "llmProvider": "claude",
+    "createdAt": "2025-07-27T17:36:03.626Z",
+    "lastUsed": "2025-07-27T17:59:05.989Z",
+    "usageCount": 2,
+    "tags": []
+  },
+  {
+    "id": "prompt_1753575996083_y2mbd6977",
+    "name": "BOM for Database System",
+    "description": "\\n\\n--- Infrastructure Requirements from uploaded document ---\\n\\nCompute Requirements:\\n- Instances... | Specs: 712GB mentioned is for all PROD.",
+    "category": "E-commerce",
+    "requirements": "\\n\\n--- Infrastructure Requirements from uploaded document ---\\n\\nCompute Requirements:\\n- Instances needed: 6\\n- CPU cores per instance: 4\\n- Memory per instance: 60 GB\\n- Instance type: standard\\n\\nStorage Requirements:\\n- Block storage: 2136 GB\\n- Object storage: 500 GB\\n- File storage: 0 GB\\n\\nDatabase Requirements:\\n- Type: oracle\\n- Size: large\\n- Storage: 2136 GB\\n\\nNetwork Requirements:\\n- Load balancer needed: Yes\\n- Bandwidth: 1 Gbps\\n- VPN required: Yes\\n\\nSummary: Oracle database environment with 6 instances (mix of prod and test), running Oracle 11.2.0.4, total of 12 cores and 180GB RAM across instances. Three instances require 712GB storage each. Environment includes both production and test databases with varying resource allocations.\\n\n\nConsider these additional items:\n1. Do not consider any app servers.\n2. Only Consider Base Oracle Database Service SKU with BYOL",
+    "followUpAnswers": {
+      "0": "us-ashburn-1",
+      "1": "No backup and recovery required",
+      "2": "Assume standard",
+      "3": "No specific security requirements",
+      "4": "712GB mentioned is for all PROD."
+    },
+    "llmProvider": "claude",
+    "createdAt": "2025-07-27T00:26:36.083Z",
+    "lastUsed": "2025-07-27T00:26:36.083Z",
+    "usageCount": 1,
+    "tags": [
+      "secure",
+      "backup"
+    ]
+  },
+  {
+    "id": "prompt_1753575824344_oai2sl512",
+    "name": "BOM for Database System",
+    "description": "\\n\\n--- Infrastructure Requirements from uploaded document ---\\n\\nCompute Requirements:\\n- Instances...",
+    "category": "E-commerce",
+    "requirements": "\\n\\n--- Infrastructure Requirements from uploaded document ---\\n\\nCompute Requirements:\\n- Instances needed: 6\\n- CPU cores per instance: 4\\n- Memory per instance: 60 GB\\n- Instance type: standard\\n\\nStorage Requirements:\\n- Block storage: 2136 GB\\n- Object storage: 500 GB\\n- File storage: 0 GB\\n\\nDatabase Requirements:\\n- Type: oracle\\n- Size: large\\n- Storage: 2136 GB\\n\\nNetwork Requirements:\\n- Load balancer needed: Yes\\n- Bandwidth: 1 Gbps\\n- VPN required: No\\n\\nSummary: Oracle database environment with 6 instances (mix of prod and test), running Oracle 11.2.0.4, total of 12 cores and 180GB RAM across instances. Storage requirements include 712GB per major instance. Production and test environments for EDW, BUSOB, FNC200, and HRB200 systems.\\n\n\nConsider these additional items:\n1. Do not consider any app servers.\n2. Consider Base Oracle Database Service SKU with BYOL",
+    "followUpAnswers": {
+      "0": "2 prod and 4 test",
+      "1": "None",
+      "2": "None",
+      "3": "None",
+      "4": "None"
+    },
+    "llmProvider": "claude",
+    "createdAt": "2025-07-27T00:23:44.345Z",
+    "lastUsed": "2025-07-27T00:23:44.345Z",
+    "usageCount": 1,
+    "tags": []
+  },
+  {
+    "id": "prompt_1753575737529_4nzvjdaha",
+    "name": "BOM for Database System",
+    "description": "\\n\\n--- Infrastructure Requirements from uploaded document ---\\n\\nCompute Requirements:\\n- Instances...",
+    "category": "Web Applications",
+    "requirements": "\\n\\n--- Infrastructure Requirements from uploaded document ---\\n\\nCompute Requirements:\\n- Instances needed: 6\\n- CPU cores per instance: 4\\n- Memory per instance: 60 GB\\n- Instance type: standard\\n\\nStorage Requirements:\\n- Block storage: 2136 GB\\n- Object storage: 500 GB\\n- File storage: 0 GB\\n\\nDatabase Requirements:\\n- Type: oracle\\n- Size: large\\n- Storage: 2136 GB\\n\\nNetwork Requirements:\\n- Load balancer needed: Yes\\n- Bandwidth: 1 Gbps\\n- VPN required: No\\n\\nSummary: Oracle database environment with 6 instances (mix of prod and test), running Oracle 11.2.0.4, total of 12 cores and 180GB RAM across instances. Storage requirements include 712GB per major instance. Production and test environments for EDW, BUSOB, FNC200, and HRB200 systems.\\n\n\nConsider these additional items:\n1. Do not consider any app servers.\n2. Consider Base Oracle Database Service SKU with BYOL",
+    "followUpAnswers": {
+      "0": "2 prod rest all text",
+      "1": "none",
+      "2": "none",
+      "3": "none",
+      "4": "none"
+    },
+    "llmProvider": "claude",
+    "createdAt": "2025-07-27T00:22:17.530Z",
+    "lastUsed": "2025-07-27T00:22:17.530Z",
+    "usageCount": 1,
+    "tags": []
+  },
+  {
+    "id": "prompt_1753557767600_1gha90wm2",
+    "name": "BOM for Database System",
+    "description": "\\n\\n--- Infrastructure Requirements from uploaded document ---\\n\\nCompute Requirements:\\n- Instances...",
+    "category": "E-commerce",
+    "requirements": "\\n\\n--- Infrastructure Requirements from uploaded document ---\\n\\nCompute Requirements:\\n- Instances needed: 6\\n- CPU cores per instance: 4\\n- Memory per instance: 60 GB\\n- Instance type: standard\\n\\nStorage Requirements:\\n- Block storage: 2136 GB\\n- Object storage: 500 GB\\n- File storage: 0 GB\\n\\nDatabase Requirements:\\n- Type: oracle\\n- Size: large\\n- Storage: 2136 GB\\n\\nNetwork Requirements:\\n- Load balancer needed: Yes\\n- Bandwidth: 1 Gbps\\n- VPN required: No\\n\\nSummary: Oracle database environment with 6 instances (mix of prod and test), running Oracle 11.2.0.4, total of 12 cores and 180GB RAM across instances. Storage requirements include 712GB per major instance. Production and test environments for EDW, BUSOB, FNC200, and HRB200 systems.\\n\n\nConsider these additional items:\n1. Do not consider any app servers.\n2. Consider Base Oracle Database Service SKU with BYOL",
+    "followUpAnswers": {
+      "0": "None",
+      "1": "None",
+      "2": "None",
+      "3": "None",
+      "4": "None"
+    },
+    "llmProvider": "claude",
+    "createdAt": "2025-07-26T19:22:47.600Z",
+    "lastUsed": "2025-07-26T19:22:47.600Z",
+    "usageCount": 1,
+    "tags": []
+  },
+  {
     "id": "prompt_1753557631478_j857yfkge",
     "name": "BOM for Database System",
     "description": "\\n\\n--- Infrastructure Requirements from uploaded document ---\\n\\nCompute Requirements:\\n- Instances...",
@@ -242,21 +339,20 @@
     "tags": []
   },
   {
-    "id": "prompt_1753557767600_1gha90wm2",
+    "id": "prompt_1753639172842_1e4kvoilq",
     "name": "BOM for Database System",
     "description": "\\n\\n--- Infrastructure Requirements from uploaded document ---\\n\\nCompute Requirements:\\n- Instances...",
     "category": "E-commerce",
-    "requirements": "\\n\\n--- Infrastructure Requirements from uploaded document ---\\n\\nCompute Requirements:\\n- Instances needed: 6\\n- CPU cores per instance: 4\\n- Memory per instance: 60 GB\\n- Instance type: standard\\n\\nStorage Requirements:\\n- Block storage: 2136 GB\\n- Object storage: 500 GB\\n- File storage: 0 GB\\n\\nDatabase Requirements:\\n- Type: oracle\\n- Size: large\\n- Storage: 2136 GB\\n\\nNetwork Requirements:\\n- Load balancer needed: Yes\\n- Bandwidth: 1 Gbps\\n- VPN required: No\\n\\nSummary: Oracle database environment with 6 instances (mix of prod and test), running Oracle 11.2.0.4, total of 12 cores and 180GB RAM across instances. Storage requirements include 712GB per major instance. Production and test environments for EDW, BUSOB, FNC200, and HRB200 systems.\\n\n\nConsider these additional items:\n1. Do not consider any app servers.\n2. Consider Base Oracle Database Service SKU with BYOL",
+    "requirements": "\\n\\n--- Infrastructure Requirements from uploaded document ---\\n\\nCompute Requirements:\\n- Instances needed: 6\\n- CPU cores per instance: 4\\n- Memory per instance: 60 GB\\n- Instance type: standard\\n\\nStorage Requirements:\\n- Block storage: 2136 GB\\n- Object storage: 500 GB\\n- File storage: 0 GB\\n\\nDatabase Requirements:\\n- Type: oracle\\n- Size: large\\n- Storage: 2136 GB\\n\\nNetwork Requirements:\\n- Load balancer needed: Yes\\n- Bandwidth: 1 Gbps\\n- VPN required: No\\n\\nSummary: Oracle database environment with 6 instances (mix of prod and test), running Oracle 11.2.0.4, total of 12 cores and 180GB RAM across instances. Storage requirements include 712GB per major instance. Production and test environments for EDW, BUSOB, FNC200, and HRB200 systems.\\n\n\nConsider these additional items:\n1. Do not consider any app servers.\n2. Only Consider Base Oracle Database Service SKU with BYOL",
     "followUpAnswers": {
-      "0": "None",
-      "1": "None",
-      "2": "None",
-      "3": "None",
-      "4": "None"
+      "0": "2 test, 4 prod",
+      "1": "none",
+      "2": "none",
+      "3": "none"
     },
     "llmProvider": "claude",
-    "createdAt": "2025-07-26T19:22:47.600Z",
-    "lastUsed": "2025-07-26T19:22:47.600Z",
+    "createdAt": "2025-07-27T17:59:32.842Z",
+    "lastUsed": "2025-07-27T17:59:32.842Z",
     "usageCount": 1,
     "tags": []
   }

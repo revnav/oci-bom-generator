@@ -227,17 +227,57 @@ class OCIService {
       for (const service of allServices) {
         const relevanceScore = this.calculateRelevanceScore(service, serviceKeywords, requirements);
         
-        if (relevanceScore > 0.3) { // Threshold for relevance
-          matchedServices.push({
-            ...service,
-            relevanceScore,
-            pricing: this.extractPricing(service)
-          });
+        if (relevanceScore > 0.1) { // Lowered threshold for relevance
+          const extractedPricing = this.extractPricing(service);
+          
+          // For fallback services, use the embedded pricing directly
+          let finalPricing = extractedPricing && Object.keys(extractedPricing).length > 0 
+            ? extractedPricing 
+            : (service.pricing && service.pricing.length > 0 ? service.pricing[0] : null);
+          
+          // Normalize pricing format - ensure unitPrice field exists
+          if (finalPricing && !finalPricing.unitPrice && finalPricing.price !== undefined) {
+            finalPricing.unitPrice = finalPricing.price;
+          }
+          if (finalPricing && !finalPricing.unit && service.metricName) {
+            finalPricing.unit = service.metricName;
+          }
+          
+          if (finalPricing) {
+            matchedServices.push({
+              ...service,
+              relevanceScore,
+              pricing: finalPricing
+            });
+          }
         }
       }
 
       // Sort by relevance score
       matchedServices.sort((a, b) => b.relevanceScore - a.relevanceScore);
+      
+      // If no services matched, ensure we have at least basic services available
+      if (matchedServices.length === 0) {
+        console.warn('⚠️ No services matched requirements, returning all fallback services');
+        return allServices.slice(0, 15).map(service => {
+          let pricing = service.pricing && service.pricing.length > 0 ? service.pricing[0] : null;
+          
+          // Ensure unitPrice field exists for consistency
+          if (pricing && !pricing.unitPrice && pricing.price !== undefined) {
+            pricing = { ...pricing, unitPrice: pricing.price };
+          }
+          
+          return {
+            partNumber: service.partNumber,
+            displayName: service.displayName,
+            serviceCategory: service.serviceCategory,
+            skuType: service.skuType,
+            pricing: pricing,
+            relevanceScore: 0.5,
+            metricName: service.metricName
+          };
+        }).filter(s => s.pricing && (s.pricing.unitPrice !== undefined || s.pricing.price !== undefined)); // Only include services with pricing
+      }
       
       // Return top 20 matches with only essential data to reduce token usage
       return matchedServices.slice(0, 20).map(service => ({
@@ -246,7 +286,8 @@ class OCIService {
         serviceCategory: service.serviceCategory,
         skuType: service.skuType,
         pricing: service.pricing,
-        relevanceScore: service.relevanceScore
+        relevanceScore: service.relevanceScore,
+        metricName: service.metricName
       }));
     } catch (error) {
       console.error('Error finding matching services:', error);

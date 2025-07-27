@@ -16,9 +16,56 @@ class LLMService {
 
     this.gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+    // Universal instruction detection patterns - works with ANY constraint type
+    this.instructionPatterns = {
+      restrictive: [
+        // "only" patterns - captures the specific requirement
+        /only\s+(consider|use|include|allow)\s+([^\n\.!?;]+?)(?=\.|\n|!|\?|;|$)/gi,
+        /exclusively\s+([^\n\.!?;]+?)(?=\.|\n|!|\?|;|$)/gi,
+        /specifically\s+([^\n\.!?;]+?)(?=\.|\n|!|\?|;|$)/gi,
+        /solely\s+([^\n\.!?;]+?)(?=\.|\n|!|\?|;|$)/gi,
+        // "must" patterns - captures mandatory requirements
+        /must\s+(be|use|include|have)\s+([^\n\.!?;]+?)(?=\.|\n|!|\?|;|$)/gi,
+        /required\s*:?\s*([^\n\.!?;]+?)(?=\.|\n|!|\?|;|$)/gi,
+        /constraint\s*:?\s*([^\n\.!?;]+?)(?=\.|\n|!|\?|;|$)/gi,
+        /limitation\s*:?\s*([^\n\.!?;]+?)(?=\.|\n|!|\?|;|$)/gi,
+        // "should" patterns - captures preferences with constraint weight
+        /should\s+(only|exclusively)?\s*([^\n\.!?;]+?)(?=\.|\n|!|\?|;|$)/gi,
+        // Generic "X only" patterns
+        /([a-zA-Z\s]+)\s+only(?=\.|\n|!|\?|;|$)/gi
+      ],
+      scope: [
+        // "do not" patterns - captures what to exclude
+        /do\s+not\s+(include|add|consider|use|allow)\s+([^\n\.!?;]+?)(?=\.|\n|!|\?|;|$)/gi,
+        /don['’]?t\s+(include|add|consider|use|allow)\s+([^\n\.!?;]+?)(?=\.|\n|!|\?|;|$)/gi,
+        // "exclude" patterns
+        /exclude\s+([^\n\.!?;]+?)(?=\.|\n|!|\?|;|$)/gi,
+        /avoid\s+([^\n\.!?;]+?)(?=\.|\n|!|\?|;|$)/gi,
+        /not\s+([^\n\.!?;]+?)(?=\.|\n|!|\?|;|$)/gi,
+        // "no" patterns - captures negative constraints
+        /no\s+([a-zA-Z][^\n\.!?;]*?)(?=\.|\n|!|\?|;|$)/gi,
+        // "without" patterns
+        /without\s+([^\n\.!?;]+?)(?=\.|\n|!|\?|;|$)/gi
+      ],
+      specific_sku: [
+        // SKU/Part number patterns - more precise matching
+        /(?:sku|part\s*number|service\s*code|product\s*code)\s*:?\s*([A-Za-z]\d+[A-Za-z0-9\-_]*)/gi,
+        /\b([A-Z]\d{5,})\b/gi, // Pattern like B88317, B109356
+        /model\s*:?\s*([A-Za-z0-9\-_]{4,})/gi
+      ]
+    };
+
     // System prompts for different tasks
     this.systemPrompts = {
       requirementAnalysis: `You are an Oracle Cloud Infrastructure (OCI) expert and solutions architect. 
+      
+      CRITICAL INSTRUCTION HANDLING RULES:
+      1. ALWAYS scan for and identify specific user instructions, constraints, and limitations
+      2. Treat explicit user instructions as MANDATORY constraints, not suggestions
+      3. Never override or expand beyond specific user requirements
+      4. If user specifies "only X" or "exclusively Y", focus ONLY on that scope
+      5. Extract and preserve exact SKU/service specifications when provided
+      
       Analyze the provided requirements and extract specific infrastructure needs including:
       - Compute requirements (CPU, RAM, instances)
       - Storage needs (block, object, file storage)
@@ -27,19 +74,46 @@ class LLMService {
       - Security requirements
       - Backup and disaster recovery needs
       - Regional/availability zone preferences
+      - SPECIFIC CONSTRAINTS and LIMITATIONS provided by user
       
       SMART ANALYSIS RULES:
       1. If specific numbers are provided (e.g., "4 cores", "16 GB RAM", "100 GB storage"), use them directly
       2. If document content contains structured data, prioritize that over asking follow-up questions
       3. Only ask follow-up questions for truly missing critical information
       4. Look for patterns like "2 servers with 4 cores each" and calculate total requirements
+      5. IDENTIFY and EXTRACT specific instructions like "only consider", "exclusively use", "must be", "do not include"
       
       If information is missing or unclear, identify specific follow-up questions to ask.
       
-      IMPORTANT: Respond with ONLY valid JSON. Do not include any explanatory text, markdown formatting, or anything other than the JSON object. Start your response with { and end with }. Required format: {"parsedRequirements": {...}, "needsFollowUp": boolean, "followUpQuestions": [...]}`,
+      IMPORTANT: Respond with ONLY valid JSON. Do not include any explanatory text, markdown formatting, or anything other than the JSON object. Start your response with { and end with }. Required format: {"parsedRequirements": {...}, "userConstraints": [...], "needsFollowUp": boolean, "followUpQuestions": [...]}`,
 
       bomGeneration: `You are creating a detailed Bill of Materials (BOM) for Oracle Cloud Infrastructure services.
-      Based on the analyzed requirements and available OCI services with pricing, create a comprehensive BOM.
+      
+      CRITICAL USER CONSTRAINT ENFORCEMENT:
+      1. ALWAYS respect user-specified constraints and limitations
+      2. If user specifies "only consider X", include ONLY X-related services
+      3. If user provides specific SKUs or part numbers, use ONLY those SKUs
+      4. If user says "exclude Y", do NOT include any Y-related services
+      5. DO NOT expand scope beyond user-defined constraints
+      6. DO NOT add "recommended" or "alternative" services outside constraints
+      7. Validate each item against user constraints before inclusion
+      
+      CRITICAL CALCULATION RULES:
+      1. Respect Oracle-specific sizing ratios (e.g., ECPUs vs cores)
+      2. Use appropriate service metrics and units as defined by Oracle
+      3. Calculate realistic quantities based on actual requirements
+      4. When user specifies cores, convert to appropriate service units (OCPU, ECPU, etc.)
+      5. Ensure quantities align with service-specific measurement units
+      
+      Based on the analyzed requirements, user constraints, and available OCI services with pricing, create a targeted BOM.
+      
+      UNIVERSAL CONSTRAINT VALIDATION:
+      - ALWAYS validate each service against ALL user constraints before inclusion
+      - If user specifies "only X", include ONLY services that match X criteria
+      - If user excludes "Y", do NOT include any services containing Y characteristics
+      - Match constraints using keyword analysis - service names, categories, SKU types must align with user requirements
+      - When in doubt, be MORE restrictive rather than adding unwanted services
+      - Document why each service was included/excluded based on specific constraint keywords
       
       CRITICAL QUANTITY RULES:
       - For HOURLY services (OCPU_HOUR, MEMORY_GB_HOUR): quantity = number of resources (e.g., 4 OCPUs, 8 GB RAM)
@@ -92,6 +166,153 @@ class LLMService {
     };
   }
 
+  // Extract specific user instructions and constraints
+  extractUserConstraints(requirementsText) {
+    const constraints = {
+      restrictive: [],
+      exclusions: [],
+      specificSkus: [],
+      mustInclude: [],
+      mustExclude: []
+    };
+
+    const text = requirementsText.toLowerCase();
+
+    // Extract restrictive instructions ("only", "exclusively")
+    this.instructionPatterns.restrictive.forEach(pattern => {
+      let match;
+      while ((match = pattern.exec(text)) !== null) {
+        constraints.restrictive.push({
+          fullMatch: match[0],
+          instruction: match[1] || match[2] || match[0],
+          type: 'restrictive'
+        });
+      }
+    });
+
+    // Extract exclusions ("do not", "exclude")
+    this.instructionPatterns.scope.forEach(pattern => {
+      let match;
+      while ((match = pattern.exec(text)) !== null) {
+        constraints.exclusions.push({
+          fullMatch: match[0],
+          instruction: match[1] || match[0],
+          type: 'exclusion'
+        });
+      }
+    });
+
+    // Extract specific SKUs/part numbers
+    this.instructionPatterns.specific_sku.forEach(pattern => {
+      let match;
+      while ((match = pattern.exec(text)) !== null) {
+        constraints.specificSkus.push({
+          fullMatch: match[0],
+          sku: match[1],
+          type: 'specific_sku'
+        });
+      }
+    });
+
+    return constraints;
+  }
+
+  // Universal service validation - works with ANY type of constraint
+  validateServiceAgainstConstraints(service, constraints, requirements) {
+    const serviceName = service.displayName?.toLowerCase() || '';
+    const serviceCategory = service.serviceCategory?.toLowerCase() || '';
+    const partNumber = service.partNumber?.toLowerCase() || '';
+    const skuType = service.skuType?.toLowerCase() || '';
+    
+    // If specific SKUs are required, only allow those
+    if (constraints.specificSkus.length > 0) {
+      const allowedSkus = constraints.specificSkus.map(s => s.sku.toLowerCase());
+      if (!allowedSkus.includes(partNumber)) {
+        return {
+          allowed: false,
+          reason: `Service ${service.partNumber} not in allowed SKUs: ${allowedSkus.join(', ')}`
+        };
+      }
+    }
+
+    // Check exclusions - flexible text matching with stop words filter
+    for (const exclusion of constraints.exclusions) {
+      const excludeText = exclusion.instruction.toLowerCase();
+      
+      // Split exclusion text into meaningful keywords (filter out common words)
+      const stopWords = ['and', 'or', 'the', 'for', 'with', 'all', 'any', 'use', 'only', 'services'];
+      const excludeKeywords = excludeText.split(/\s+/)
+        .filter(word => word.length > 2 && !stopWords.includes(word));
+      
+      // Check if any meaningful exclusion keywords match service properties
+      for (const keyword of excludeKeywords) {
+        if (serviceName.includes(keyword) || 
+            serviceCategory.includes(keyword) || 
+            partNumber.includes(keyword) ||
+            skuType.includes(keyword)) {
+          return {
+            allowed: false,
+            reason: `Service excluded by constraint '${exclusion.fullMatch}' - matched keyword '${keyword}'`
+          };
+        }
+      }
+    }
+
+    // Check restrictive constraints - flexible matching
+    if (constraints.restrictive.length > 0) {
+      let matchesRestriction = false;
+      let matchDetails = [];
+      
+      for (const restriction of constraints.restrictive) {
+        const restrictText = restriction.instruction.toLowerCase();
+        
+        // Split restriction into meaningful keywords (filter out common words)
+        const stopWords = ['and', 'or', 'the', 'for', 'with', 'all', 'any', 'use', 'only', 'services', 'consider', 'include'];
+        const restrictKeywords = restrictText.split(/\s+/)
+          .filter(word => word.length > 2 && !stopWords.includes(word));
+        
+        // Skip if no meaningful keywords found
+        if (restrictKeywords.length === 0) continue;
+        
+        // Check how many meaningful keywords match
+        let matchCount = 0;
+        let matchedKeywords = [];
+        
+        for (const keyword of restrictKeywords) {
+          if (serviceName.includes(keyword) || 
+              serviceCategory.includes(keyword) || 
+              partNumber.includes(keyword) ||
+              skuType.includes(keyword)) {
+            matchCount++;
+            matchedKeywords.push(keyword);
+          }
+        }
+        
+        // Service matches if it contains significant portion of meaningful constraint keywords
+        const matchRatio = matchCount / restrictKeywords.length;
+        if (matchRatio >= 0.4 || matchCount >= 2) { // At least 40% keywords match OR 2+ keywords
+          matchesRestriction = true;
+          matchDetails.push(`Matched ${matchCount}/${restrictKeywords.length} keywords from '${restriction.fullMatch}': [${matchedKeywords.join(', ')}]`);
+          break;
+        }
+      }
+      
+      if (!matchesRestriction) {
+        return {
+          allowed: false,
+          reason: `Service doesn't match restrictive constraints: ${constraints.restrictive.map(r => r.fullMatch).join('; ')}`
+        };
+      } else {
+        return {
+          allowed: true,
+          reason: `Service matches constraints: ${matchDetails.join('; ')}`
+        };
+      }
+    }
+
+    return { allowed: true, reason: 'Service meets all constraints' };
+  }
+
   async analyzeRequirements(requirements, provider, followUpAnswers = null) {
     if (followUpAnswers && Object.keys(followUpAnswers).length > 0) {
       // When follow-up answers are provided, create a comprehensive analysis
@@ -99,14 +320,27 @@ class LLMService {
         .map(([key, value]) => `${key}: ${value}`)
         .join('\n');
         
+      // Extract user constraints from original requirements
+      const userConstraints = this.extractUserConstraints(requirements);
+      
       const prompt = `Original requirements: ${requirements}
 
 Follow-up answers provided:
 ${answersText}
 
-Based on the original requirements and these follow-up answers, provide a complete infrastructure analysis. All necessary information has been provided, so do not request any additional follow-up questions.`;
+Detected User Constraints:
+${JSON.stringify(userConstraints, null, 2)}
+
+Based on the original requirements and these follow-up answers, provide a complete infrastructure analysis. All necessary information has been provided, so do not request any additional follow-up questions. IMPORTANT: Preserve and include the detected user constraints in your response.`;
       
       const systemPrompt = `You are an Oracle Cloud Infrastructure (OCI) expert and solutions architect. 
+      
+      CRITICAL INSTRUCTION HANDLING RULES:
+      1. ALWAYS preserve and respect user constraints and limitations
+      2. Treat explicit user instructions as MANDATORY constraints, not suggestions
+      3. Never override or expand beyond specific user requirements
+      4. If user specifies "only X" or "exclusively Y", focus ONLY on that scope
+      
       Analyze the provided requirements and follow-up answers to extract complete infrastructure needs including:
       - Compute requirements (CPU, RAM, instances)
       - Storage needs (block, object, file storage)
@@ -115,10 +349,11 @@ Based on the original requirements and these follow-up answers, provide a comple
       - Security requirements
       - Backup and disaster recovery needs
       - Regional/availability zone preferences
+      - USER CONSTRAINTS and LIMITATIONS (preserve exactly as detected)
       
       IMPORTANT: Since follow-up questions have already been answered, set needsFollowUp to false and provide empty followUpQuestions array.
       
-      IMPORTANT: Respond with ONLY valid JSON. Do not include any explanatory text, markdown formatting, or anything other than the JSON object. Start your response with { and end with }. Required format: {"parsedRequirements": {...}, "needsFollowUp": false, "followUpQuestions": []}`;
+      IMPORTANT: Respond with ONLY valid JSON. Do not include any explanatory text, markdown formatting, or anything other than the JSON object. Start your response with { and end with }. Required format: {"parsedRequirements": {...}, "userConstraints": {...}, "needsFollowUp": false, "followUpQuestions": []}`;
 
       try {
         const response = await this.callLLM(provider, systemPrompt, prompt);
@@ -142,7 +377,16 @@ Based on the original requirements and these follow-up answers, provide a comple
     } else {
       // Initial analysis - may need follow-up questions
       try {
-        const response = await this.callLLM(provider, this.systemPrompts.requirementAnalysis, requirements);
+        // Extract user constraints from requirements
+        const userConstraints = this.extractUserConstraints(requirements);
+        
+        // Add constraint information to the prompt
+        const enhancedRequirements = `${requirements}
+
+Detected User Constraints:
+${JSON.stringify(userConstraints, null, 2)}`;
+        
+        const response = await this.callLLM(provider, this.systemPrompts.requirementAnalysis, enhancedRequirements);
         
         // Extract JSON from response
         const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -151,7 +395,14 @@ Based on the original requirements and these follow-up answers, provide a comple
           throw new Error('LLM did not return valid JSON format');
         }
         
-        return JSON.parse(jsonMatch[0]);
+        const result = JSON.parse(jsonMatch[0]);
+        
+        // Ensure user constraints are preserved in the result
+        if (!result.userConstraints) {
+          result.userConstraints = userConstraints;
+        }
+        
+        return result;
       } catch (error) {
         console.error(`Error analyzing requirements with ${provider}:`, error);
         throw new Error(`Failed to analyze requirements: ${error.message}`);
@@ -160,24 +411,127 @@ Based on the original requirements and these follow-up answers, provide a comple
   }
 
   async generateBOM(parsedRequirements, ociServices, provider) {
-    // Create a more concise prompt to avoid token limits
-    const essentialServices = ociServices.map(service => ({
-      partNumber: service.partNumber,
-      name: service.displayName,
-      category: service.serviceCategory,
-      pricing: service.pricing?.length > 0 ? service.pricing[0] : null,
-      metric: service.metricName || service.pricing?.[0]?.unit
-    })).filter(service => service.pricing); // Only include services with pricing
-
-    // Limit services further if still too many
-    const limitedServices = essentialServices.slice(0, 15);
-
-    const prompt = `Requirements Summary: ${JSON.stringify(parsedRequirements)}
+    // Extract user constraints from parsed requirements
+    const userConstraints = parsedRequirements.userConstraints || {};
     
-Available OCI Services (${limitedServices.length} services):
-${limitedServices.map(s => `- ${s.partNumber}: ${s.name} (${s.category}) - Metric: ${s.metric} - Price: $${s.pricing.unitPrice}/${s.pricing.unit}`).join('\n')}
+    // Filter services based on user constraints BEFORE sending to LLM
+    let filteredServices = ociServices;
+    
+    if (userConstraints && (userConstraints.restrictive?.length > 0 || userConstraints.specificSkus?.length > 0 || userConstraints.exclusions?.length > 0)) {
+      console.log('🔍 Applying user constraints to filter OCI services...');
+      console.log('📋 User constraints:', JSON.stringify(userConstraints, null, 2));
+      
+      filteredServices = ociServices.filter(service => {
+        const validation = this.validateServiceAgainstConstraints(service, userConstraints, parsedRequirements);
+        console.log(`🔍 Evaluating: ${service.partNumber} - ${service.displayName}`);
+        console.log(`   Category: ${service.serviceCategory}, SKU Type: ${service.skuType}`);
+        if (!validation.allowed) {
+          console.log(`❌ EXCLUDED: ${validation.reason}`);
+        } else {
+          console.log(`✅ INCLUDED: ${validation.reason}`);
+        }
+        return validation.allowed;
+      });
+      
+      console.log(`📊 Services filtered from ${ociServices.length} to ${filteredServices.length} based on constraints`);
+    }
+    
+    // Create a more concise prompt to avoid token limits
+    console.log(`🔍 Processing ${filteredServices.length} filtered services for BOM generation`);
+    
+    const essentialServices = filteredServices.map((service, index) => {
+      // Handle both direct pricing object and array format
+      let pricingInfo = null;
+      if (service.pricing) {
+        if (Array.isArray(service.pricing)) {
+          pricingInfo = service.pricing.length > 0 ? service.pricing[0] : null;
+        } else {
+          pricingInfo = service.pricing;
+        }
+      }
+      
+      console.log(`  Service ${index + 1}: ${service.partNumber} - ${service.displayName}`);
+      console.log(`    Original pricing:`, service.pricing);
+      console.log(`    Processed pricing:`, pricingInfo);
+      console.log(`    Has unitPrice:`, pricingInfo?.unitPrice !== undefined);
+      
+      // Normalize pricing format
+      if (pricingInfo && !pricingInfo.unitPrice && pricingInfo.price !== undefined) {
+        pricingInfo.unitPrice = pricingInfo.price;
+      }
+      
+      return {
+        partNumber: service.partNumber,
+        name: service.displayName,
+        category: service.serviceCategory,
+        pricing: pricingInfo,
+        metric: service.metricName || pricingInfo?.unit || pricingInfo?.metricName
+      };
+    }).filter(service => {
+      const hasValidPricing = service.pricing && (service.pricing.unitPrice !== undefined || service.pricing.price !== undefined);
+      if (!hasValidPricing) {
+        console.log(`❌ Filtered out ${service.partNumber}: Invalid pricing`, service.pricing);
+      } else {
+        console.log(`✅ Kept ${service.partNumber}: Valid pricing $${service.pricing.unitPrice || service.pricing.price}`);
+      }
+      return hasValidPricing;
+    });
 
-Create a detailed BOM with realistic quantities and pricing calculations.`;
+    // Ensure we have at least some services available
+    if (essentialServices.length === 0) {
+      console.warn('⚠️ No services with valid pricing found after filtering');
+      console.log('🔄 Falling back to use all filtered services with basic pricing');
+      
+      // Fallback: use filtered services with default pricing structure
+      const fallbackServices = filteredServices.slice(0, 10).map(service => ({
+        partNumber: service.partNumber,
+        name: service.displayName,
+        category: service.serviceCategory,
+        pricing: {
+          unitPrice: 0.05, // Default price
+          unit: 'HOUR',
+          currency: 'USD',
+          model: 'PAYG'
+        },
+        metric: service.metricName || 'HOUR'
+      }));
+      
+      if (fallbackServices.length === 0) {
+        throw new Error('ERROR: No services provided in available services list');
+      }
+      
+      console.log(`📋 Using ${fallbackServices.length} fallback services for BOM generation`);
+      return await this.generateBOMPrompt(parsedRequirements, fallbackServices, provider, userConstraints);
+    }
+
+    // Limit services further if still too many (but respect constraints)
+    const limitedServices = essentialServices.slice(0, 20);
+    
+    return await this.generateBOMPrompt(parsedRequirements, limitedServices, provider, userConstraints);
+  }
+
+  async generateBOMPrompt(parsedRequirements, limitedServices, provider, userConstraints) {
+    console.log(`📋 Using ${limitedServices.length} services for BOM generation`);
+    limitedServices.forEach(s => {
+      const price = s.pricing.unitPrice || s.pricing.price || 'N/A';
+      const unit = s.pricing.unit || s.metric || 'N/A';
+      console.log(`  - ${s.partNumber}: ${s.name} ($${price}/${unit})`);
+    });
+
+    const constraintsText = userConstraints && Object.keys(userConstraints).length > 0 
+      ? `\n\nCRITICAL USER CONSTRAINTS - MUST BE RESPECTED:\n${JSON.stringify(userConstraints, null, 2)}\n\nONLY include services that meet these constraints. DO NOT add any services outside these constraints.`
+      : '';
+    
+    const prompt = `Requirements Summary: ${JSON.stringify(parsedRequirements)}${constraintsText}
+    
+Available OCI Services (${limitedServices.length} services - already filtered by constraints):
+${limitedServices.map(s => {
+      const price = s.pricing.unitPrice || s.pricing.price || 0.05;
+      const unit = s.pricing.unit || s.metric || 'HOUR';
+      return `- ${s.partNumber}: ${s.name} (${s.category}) - Metric: ${s.metric} - Price: $${price}/${unit}`;
+    }).join('\n')}
+
+Create a detailed BOM with realistic quantities and pricing calculations. IMPORTANT: Only use services from the above filtered list that meet the user constraints.`;
 
     // Check approximate token count (rough estimate: 1 token ≈ 4 characters)
     const estimatedTokens = (this.systemPrompts.bomGeneration.length + prompt.length) / 4;
@@ -261,6 +615,54 @@ Create a detailed BOM with realistic quantities and pricing calculations.`;
         console.error('❌ Invalid BOM structure - missing items array');
         console.error('Parsed result structure:', Object.keys(parsedResult));
         throw new Error('BOM structure invalid - missing items array');
+      }
+      
+      // Final validation against user constraints
+      const userConstraints = parsedRequirements.userConstraints || {};
+      if (userConstraints && (userConstraints.restrictive?.length > 0 || userConstraints.specificSkus?.length > 0 || userConstraints.exclusions?.length > 0)) {
+        console.log('🔎 Final validation of BOM items against user constraints...');
+        
+        const validatedItems = [];
+        const rejectedItems = [];
+        
+        for (const item of parsedResult.items) {
+          // Create a mock service object for validation
+          const mockService = {
+            partNumber: item.sku || item.partNumber,
+            displayName: item.description || item.displayName,
+            serviceCategory: item.category || item.serviceCategory
+          };
+          
+          const validation = this.validateServiceAgainstConstraints(mockService, userConstraints, parsedRequirements);
+          
+          if (validation.allowed) {
+            validatedItems.push(item);
+            console.log(`✅ BOM item validated: ${item.sku} - ${validation.reason}`);
+          } else {
+            rejectedItems.push({ item, reason: validation.reason });
+            console.log(`❌ BOM item rejected: ${item.sku} - ${validation.reason}`);
+          }
+        }
+        
+        if (rejectedItems.length > 0) {
+          console.log(`⚠️ Removed ${rejectedItems.length} items that violated user constraints`);
+          rejectedItems.forEach(rejected => {
+            console.log(`  - ${rejected.item.sku}: ${rejected.reason}`);
+          });
+        }
+        
+        parsedResult.items = validatedItems;
+        
+        // Add constraint compliance information
+        parsedResult.constraintCompliance = {
+          originalItemCount: parsedResult.items.length + rejectedItems.length,
+          validatedItemCount: validatedItems.length,
+          rejectedItemCount: rejectedItems.length,
+          rejectedItems: rejectedItems.map(r => ({ sku: r.item.sku, reason: r.reason })),
+          appliedConstraints: userConstraints
+        };
+        
+        console.log(`📊 Final BOM: ${validatedItems.length} items (${rejectedItems.length} rejected by constraints)`);
       }
       
       return parsedResult;

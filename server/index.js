@@ -84,6 +84,11 @@ app.post('/api/generate-bom', validateBomRequest, async (req, res) => {
     // Step 1: Analyze requirements with selected LLM
     console.log(`1️⃣ Analyzing requirements with ${llmProvider}...`);
     const analysis = await llmService.analyzeRequirements(requirements, llmProvider, followUpAnswers);
+    
+    // Log detected user constraints for debugging
+    if (analysis.userConstraints) {
+      console.log(`🔒 Detected user constraints:`, JSON.stringify(analysis.userConstraints, null, 2));
+    }
 
     // Step 2: Check if follow-up questions are needed
     // Skip follow-up questions if answers are already provided
@@ -104,10 +109,18 @@ app.post('/api/generate-bom', validateBomRequest, async (req, res) => {
     const ociServices = await ociService.findMatchingServices(analysis.parsedRequirements);
     console.log(`✅ Found ${ociServices.length} OCI services`);
 
-    // Step 4: Generate final BOM structure
-    console.log(`3️⃣ Generating BOM with ${llmProvider}...`);
+    // Step 4: Generate final BOM structure with constraint enforcement
+    console.log(`3️⃣ Generating BOM with ${llmProvider} and user constraints...`);
     const bomData = await llmService.generateBOM(analysis.parsedRequirements, ociServices, llmProvider);
     console.log(`✅ BOM data generated with ${bomData.items?.length || 0} items`);
+    
+    // Log final BOM items for constraint verification
+    if (bomData.items && analysis.userConstraints) {
+      console.log(`🔍 Final BOM items (constraint-filtered):`);
+      bomData.items.forEach(item => {
+        console.log(`  - ${item.sku}: ${item.description}`);
+      });
+    }
 
     // Step 5: Create Excel file
     console.log(`4️⃣ Creating Excel file...`);
@@ -295,7 +308,7 @@ app.use((error, req, res, next) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 OCI BOM Generator Server running on port ${PORT}`);
   console.log(`📊 Supported LLMs: OpenAI, Claude, Gemini, Grok, DeepSeek`);
   console.log(`🔧 API endpoints available at http://localhost:${PORT}/api/`);

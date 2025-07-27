@@ -32,6 +32,17 @@ cd server && npm test
 
 # Frontend tests  
 cd client && npm test
+
+# Run individual test files
+cd server && npx jest services/llmService.test.js
+cd client && npm test -- --testNamePattern="ComponentName"
+```
+
+### Code Quality
+```bash
+# No specific linting commands configured
+# Both client and server use default ESLint from react-scripts and jest
+# Check package.json scripts for any available lint commands
 ```
 
 ### Production Build
@@ -88,17 +99,53 @@ NODE_ENV=development
 
 ### Important Technical Details
 
-- **Rate Limiting**: Applied to all `/api/` routes via middleware
+- **Rate Limiting**: Applied to all `/api/` routes via middleware (`server/middleware/rateLimiter.js`)
 - **File Uploads**: 10MB limit, supports PDF/Office/images, stored in `server/uploads/`
-- **Client Proxy**: React dev server proxies API calls to `http://localhost:3001`
-- **Security**: Helmet.js headers, CORS, input validation with Joi schemas
+- **Client Proxy**: React dev server proxies API calls to `http://localhost:3001` (configured in `client/package.json`)
+- **Security**: Helmet.js headers, CORS, input validation with Joi schemas (`server/middleware/validation.js`)
 - **Error Handling**: Comprehensive error handling with user-friendly messages
 - **Caching**: OCI service data cached for 1 hour to reduce API calls
+- **Development Dependencies**: Uses `nodemon` for server hot-reload, `concurrently` for parallel processes
 
 ### Development Workflow
 
-1. Both client and server run concurrently in development
-2. Frontend uses proxy for API calls during development
-3. File uploads are handled by multer middleware with type validation
+1. Both client and server run concurrently in development via `npm run dev`
+2. Frontend uses proxy configuration for API calls during development
+3. File uploads are handled by multer middleware with type validation in `server/index.js:26-43`
 4. React Query manages server state with automatic caching and refetching
-5. Toast notifications provide user feedback for all operations
+5. Toast notifications provide user feedback for all operations (react-hot-toast)
+6. No formal linting setup - relies on default configurations
+7. **Constraint Processing Flow**:
+   - User input → `extractUserConstraints()` → Enhanced LLM prompts
+   - OCI services → `validateServiceAgainstConstraints()` → Filtered services
+   - BOM generation → Final validation → Compliance reporting
+
+### Key File Locations
+
+- **Main Entry Points**: `server/index.js`, `client/src/App.js`
+- **API Routes**: All defined in `server/index.js` (no separate router files)
+- **Services**: All business logic in `server/services/` directory
+- **Frontend Components**: `client/src/components/` and `client/src/pages/`
+- **Data Storage**: `server/data/saved-prompts.json` for prompt persistence
+- **Configuration**: Environment variables in `server/.env`, proxy in `client/package.json`
+
+### User Instruction Handling (New Feature)
+
+The system now includes sophisticated constraint detection and enforcement:
+
+- **Constraint Detection**: `llmService.extractUserConstraints()` automatically detects:
+  - Restrictive instructions: "only consider X", "exclusively Y", "specifically Z"
+  - Exclusions: "do not include", "exclude", "avoid", "no X"
+  - Specific SKUs: "SKU B88317", "part number X", "service code Y"
+
+- **Service Filtering**: OCI services are filtered BEFORE LLM processing based on detected constraints
+
+- **Validation**: Final BOM items are validated against constraints in `validateServiceAgainstConstraints()`
+
+- **Compliance Reporting**: Detailed logs show which items were included/excluded and why
+
+**Critical Implementation Notes:**
+- User constraints are treated as **mandatory**, not suggestions
+- System never expands scope beyond user-defined limitations
+- LLM prompts are enhanced with constraint information
+- Service validation happens at multiple stages (pre-LLM and post-generation)
