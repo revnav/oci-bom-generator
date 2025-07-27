@@ -1038,9 +1038,9 @@ Create detailed BOM with realistic quantities and constraint compliance document
   }
 
   async callGrok(systemPrompt, userPrompt) {
-    // Grok API integration - update endpoint when available
+    // Grok API integration - using grok-4-latest model
     const response = await axios.post('https://api.x.ai/v1/chat/completions', {
-      model: 'grok-beta',
+      model: 'grok-4-latest',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }

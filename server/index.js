@@ -64,7 +64,7 @@ app.get('/api/llm-providers', (req, res) => {
       { id: 'openai', name: 'OpenAI GPT-4o', cost: '$2.50/$10.00 per 1M tokens' },
       { id: 'claude', name: 'Claude 3.7 Sonnet', cost: '$3.00/$15.00 per 1M tokens' },
       { id: 'gemini', name: 'Google Gemini 2.5 Pro', cost: '$1.25/$5.00 per 1M tokens' },
-      { id: 'grok', name: 'xAI Grok-1.5', cost: '$3.00/$15.00 per 1M tokens' },
+      { id: 'grok', name: 'xAI Grok-4 Latest', cost: '$3.00/$15.00 per 1M tokens' },
       { id: 'deepseek', name: 'DeepSeek V3', cost: '$0.27/$1.10 per 1M tokens' }
     ]
   });
