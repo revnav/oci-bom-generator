@@ -1,5 +1,24 @@
 [
   {
+    "id": "prompt_1753660185383_8l6cse3d2",
+    "name": "BOM for Database System",
+    "description": "Generate BOM for \"100-user Oracle database, budget-conscious, no app servers\"",
+    "category": "Data & Analytics",
+    "requirements": "Generate BOM for \"100-user Oracle database, budget-conscious, no app servers\"",
+    "followUpAnswers": {
+      "0": "OLTP",
+      "1": "1000 IOPS",
+      "2": "No",
+      "3": "10%",
+      "4": "VM DB system"
+    },
+    "llmProvider": "grok",
+    "createdAt": "2025-07-27T23:49:45.383Z",
+    "lastUsed": "2025-07-28T03:44:46.013Z",
+    "usageCount": 2,
+    "tags": []
+  },
+  {
     "id": "prompt_1753660038400_p6da5fikd",
     "name": "BOM for Database System",
     "description": "1. Oracle Database server: 4 cores, 64 GB RAM\n2. 1 TB of storage\n3. No backup or DR\n4. Deploy in US ...",
@@ -519,22 +538,26 @@
     "tags": []
   },
   {
-    "id": "prompt_1753660185383_8l6cse3d2",
+    "id": "prompt_1753674367019_3j9sz7pt8",
     "name": "BOM for Database System",
-    "description": "Generate BOM for \"100-user Oracle database, budget-conscious, no app servers\"",
-    "category": "Data & Analytics",
-    "requirements": "Generate BOM for \"100-user Oracle database, budget-conscious, no app servers\"",
+    "description": "Generat BOM for the following configuration.\n1. Oracle Database server: 4 cores, 64 GB RAM\n2. 1 TB o...",
+    "category": "Enterprise Applications",
+    "requirements": "Generat BOM for the following configuration.\n1. Oracle Database server: 4 cores, 64 GB RAM\n2. 1 TB of storage\n3. No backup or DR\n4. Deploy in US regions.\n\nConsider these additional items:\n1. Do not consider any app servers for this.\n2. Do not consider any compute VM shapes for this. I am not running Oracle databases on IaaS.\n3. Consider only Oracle database Cloud service: Oracle Base Database Service SKU with BYOL for this BOM.\n4. **Do not** consider Oracle Exadata Exascale Database or Exadata Cloud Service SKUs for this BOM.",
     "followUpAnswers": {
-      "0": "OLTP",
-      "1": "1000 IOPS",
-      "2": "No",
-      "3": "10%",
-      "4": "VM DB system"
+      "0": "US East",
+      "1": "19c",
+      "2": "Enterprise",
+      "3": "Higher Performance"
     },
-    "llmProvider": "grok",
-    "createdAt": "2025-07-27T23:49:45.383Z",
-    "lastUsed": "2025-07-27T23:49:45.383Z",
+    "llmProvider": "claude",
+    "createdAt": "2025-07-28T03:46:07.019Z",
+    "lastUsed": "2025-07-28T03:46:07.019Z",
     "usageCount": 1,
-    "tags": []
+    "tags": [
+      "high-availability",
+      "scalable",
+      "cloud-native",
+      "backup"
+    ]
   }
 ]
