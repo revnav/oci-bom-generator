@@ -186,9 +186,23 @@ class LLMService {
       - Start response with { and end with }
       - Use double quotes for all strings, never single quotes
       - No trailing commas after the last property
+      - In "notes" field: Use only alphanumeric characters, spaces, hyphens, periods, and commas
+      - NEVER use single quotes (') or unescaped double quotes (") within string values
+      - Replace problematic characters: single quote → hyphen, double quote → hyphen
+      - Keep notes simple and avoid complex punctuation or nested quotes
       - Escape special characters in strings (\\n for newlines, \\" for quotes)
       - Numbers should not be quoted
-      - Boolean values should be true/false (not quoted)`
+      - Boolean values should be true/false (not quoted)
+      
+      EXAMPLE GOOD NOTES:
+      "Database service for 100 users with standard performance"
+      "Block storage supporting the database instance"
+      "Cost-optimized choice for customer requirements"
+      
+      EXAMPLE BAD NOTES (DO NOT USE):
+      "Service for user's 'special' requirements"
+      "Matches customer's \"only database\" constraint"
+      "Supports 'BYOL' licensing model"`
     };
   }
 
@@ -700,16 +714,21 @@ Create detailed BOM with realistic quantities and constraint compliance document
       
       console.log(`🔍 Extracted JSON from ${provider}:`, jsonString.substring(0, 200) + '...');
       
-      // Try to fix common JSON issues before parsing
+      // Enhanced JSON cleaning with specific focus on notes field quote issues
       let cleanedJson = jsonString
         .replace(/,\s*}/g, '}')  // Remove trailing commas in objects
         .replace(/,\s*]/g, ']')  // Remove trailing commas in arrays
         .replace(/([{,]\s*)(\w+):/g, '$1"$2":')  // Quote unquoted keys
-        .replace(/:\s*([^",{\[\]}\s][^",}\]]*[^",}\]\s])\s*([,}])/g, ': "$1"$2')  // Quote unquoted string values
-        .replace(/'\s*([^']*)\s*'/g, '"$1"')  // Replace single quotes with double quotes
-        .replace(/\n/g, '\\n')  // Escape newlines
+        // Escape control characters first
+        .replace(/\n/g, '\\n')  // Escape newlines first
+        .replace(/\r/g, '\\r')  // Escape carriage returns  
         .replace(/\t/g, '\\t')  // Escape tabs
-        .replace(/\r/g, '\\r');  // Escape carriage returns
+        // Specific fix for notes field with embedded quotes - replace with safe characters
+        .replace(/"notes":\s*"([^"]*)'([^"]*)"([,}])/g, '"notes": "$1-$2"$3')  // Replace single quotes in notes with hyphens
+        .replace(/"notes":\s*"([^"]*)"([^",}]*)"([^",}]*)"([,}])/g, '"notes": "$1-$2-$3"$4')  // Replace problematic internal quotes with hyphens
+        // General quote fixes for other fields
+        .replace(/"([^"]*)'([^"]*)":/g, '"$1\\'$2":')  // Escape single quotes in keys
+        .replace(/:\s*"([^"]*)'([^"]*)"([,}])/g, ': "$1\\'$2"$3')  // Escape single quotes in non-notes values
       
       console.log(`🧹 Cleaned JSON preview:`, cleanedJson.substring(0, 300) + '...');
       
@@ -722,14 +741,17 @@ Create detailed BOM with realistic quantities and constraint compliance document
           cleanedJson.substring(Math.max(0, 1245 - 50), 1245 + 50)
         );
         
-        // Try a more aggressive cleaning approach
+        // Try a more aggressive cleaning approach with focus on notes field
         console.log('🔧 Attempting more aggressive JSON cleaning...');
         let aggressiveClean = jsonString
           .replace(/[\n\r\t]/g, ' ')  // Replace all whitespace with spaces
           .replace(/,\s*([}\]])/g, '$1')  // Remove trailing commas
           .replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":')  // Quote keys
-          .replace(/:\s*([^",{\[\]}\s][^",}\]]*)\s*([,}])/g, ': "$1"$2')  // Quote values
-          .replace(/'/g, '"')  // Replace single quotes
+          // Aggressive fix for notes field - replace all problematic quotes with safe characters
+          .replace(/"notes":\s*"([^"]*)'([^"]*)"([,}\]])/g, '"notes": "$1-$2"$3')  // Single quotes → hyphens
+          .replace(/"notes":\s*"([^"]*)"([^",}]*)"([,}])/g, '"notes": "$1-$2"$3')  // Double quotes → hyphens
+          .replace(/"notes":\s*"([^"]*);([^"]*)"([,}])/g, '"notes": "$1-$2"$3')  // Semicolons → hyphens
+          .replace(/"notes":\s*"([^"]*):([^"]*)"([,}])/g, '"notes": "$1-$2"$3')  // Colons → hyphens
           .replace(/\s+/g, ' ')  // Normalize whitespace
           .trim();
           
