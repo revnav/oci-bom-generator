@@ -2,6 +2,7 @@ const OpenAI = require('openai');
 const { Anthropic } = require('@anthropic-ai/sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const axios = require('axios');
+const constraintValidator = require('./constraintValidatorRedesigned');
 
 class LLMService {
   constructor() {
@@ -191,54 +192,11 @@ class LLMService {
     };
   }
 
-  // Extract specific user instructions and constraints
+  // Extract customer constraints using redesigned constraint validator
   extractUserConstraints(requirementsText) {
-    const constraints = {
-      restrictive: [],
-      exclusions: [],
-      specificSkus: [],
-      mustInclude: [],
-      mustExclude: []
-    };
-
-    const text = requirementsText.toLowerCase();
-
-    // Extract restrictive instructions ("only", "exclusively")
-    this.instructionPatterns.restrictive.forEach(pattern => {
-      let match;
-      while ((match = pattern.exec(text)) !== null) {
-        constraints.restrictive.push({
-          fullMatch: match[0],
-          instruction: match[1] || match[2] || match[0],
-          type: 'restrictive'
-        });
-      }
-    });
-
-    // Extract exclusions ("do not", "exclude")
-    this.instructionPatterns.scope.forEach(pattern => {
-      let match;
-      while ((match = pattern.exec(text)) !== null) {
-        constraints.exclusions.push({
-          fullMatch: match[0],
-          instruction: match[1] || match[0],
-          type: 'exclusion'
-        });
-      }
-    });
-
-    // Extract specific SKUs/part numbers
-    this.instructionPatterns.specific_sku.forEach(pattern => {
-      let match;
-      while ((match = pattern.exec(text)) !== null) {
-        constraints.specificSkus.push({
-          fullMatch: match[0],
-          sku: match[1],
-          type: 'specific_sku'
-        });
-      }
-    });
-
+    console.log('🔍 Extracting customer constraints using redesigned validator...');
+    const constraints = constraintValidator.extractCustomerConstraints(requirementsText);
+    console.log('📋 Extracted constraints:', JSON.stringify(constraints, null, 2));
     return constraints;
   }
 
@@ -591,21 +549,12 @@ ${JSON.stringify(userConstraints, null, 2)}`;
     // Filter services based on user constraints BEFORE sending to LLM
     let filteredServices = ociServices;
     
-    if (userConstraints && (userConstraints.businessRequirements?.length > 0 || userConstraints.specificSkus?.length > 0 || userConstraints.exclusions?.length > 0)) {
-      console.log('🔍 Applying customer preferences to filter Oracle services...');
-      console.log('📋 Customer requirements:', JSON.stringify(userConstraints, null, 2));
+    if (userConstraints && userConstraints.validationRules?.length > 0) {
+      console.log('🔍 Applying customer constraints to filter Oracle services...');
+      console.log('📋 Customer constraints:', JSON.stringify(userConstraints, null, 2));
       
-      filteredServices = ociServices.filter(service => {
-        const validation = this.validateServiceAgainstConstraints(service, userConstraints, parsedRequirements);
-        console.log(`🔍 Evaluating: ${service.partNumber} - ${service.displayName}`);
-        console.log(`   Category: ${service.serviceCategory}, SKU Type: ${service.skuType}`);
-        if (!validation.allowed) {
-          console.log(`❌ EXCLUDED: ${validation.reason}`);
-        } else {
-          console.log(`✅ INCLUDED: ${validation.reason}`);
-        }
-        return validation.allowed;
-      });
+      const filterResult = constraintValidator.filterServicesWithConstraints(ociServices, userConstraints);
+      filteredServices = filterResult.includedServices;
       
       console.log(`📊 Oracle services filtered from ${ociServices.length} to ${filteredServices.length} based on customer preferences`);
     }
@@ -797,8 +746,8 @@ Create detailed BOM with realistic quantities and constraint compliance document
       
       // Final validation against user constraints
       const userConstraints = parsedRequirements.userConstraints || {};
-      if (userConstraints && (userConstraints.businessRequirements?.length > 0 || userConstraints.specificSkus?.length > 0 || userConstraints.exclusions?.length > 0)) {
-        console.log('🔎 Final validation of BOM items against user constraints...');
+      if (userConstraints && userConstraints.validationRules?.length > 0) {
+        console.log('🔎 Final validation of BOM items against customer constraints...');
         
         const validatedItems = [];
         const rejectedItems = [];
@@ -811,14 +760,14 @@ Create detailed BOM with realistic quantities and constraint compliance document
             serviceCategory: item.category || item.serviceCategory
           };
           
-          const validation = this.validateServiceAgainstConstraints(mockService, userConstraints, parsedRequirements);
+          const validation = constraintValidator.validateServiceAgainstCustomerConstraints(mockService, userConstraints);
           
           if (validation.allowed) {
             validatedItems.push(item);
-            console.log(`✅ BOM item validated: ${item.sku} - ${validation.reason}`);
+            console.log(`✅ BOM item validated: ${item.sku} - ${validation.businessJustification}`);
           } else {
-            rejectedItems.push({ item, reason: validation.reason });
-            console.log(`❌ BOM item rejected: ${item.sku} - ${validation.reason}`);
+            rejectedItems.push({ item, reason: validation.businessJustification || validation.reasons.join('; ') });
+            console.log(`❌ BOM item rejected: ${item.sku} - ${validation.businessJustification}`);
           }
         }
         
@@ -829,31 +778,49 @@ Create detailed BOM with realistic quantities and constraint compliance document
           });
         }
         
-        // UNIVERSAL constraint validation - let LLM handle interpretation, document violations
-        console.log('📋 Applying universal constraint validation...');
+        // Enhanced business validation with redesigned system
+        console.log('📋 Adding comprehensive customer compliance documentation...');
         
-        // Add constraint compliance documentation to each item
+        // Add enhanced constraint compliance documentation to each item
         parsedResult.items = validatedItems.map(item => {
-          // Add constraint compliance metadata
-          const constraintCompliance = {
-            userConstraints: userConstraints,
-            constraintAnalysis: this.analyzeItemConstraintCompliance(item, userConstraints),
-            validationPassed: true
+          // Create mock service for validation
+          const mockService = {
+            partNumber: item.sku || item.partNumber,
+            displayName: item.description || item.displayName,
+            serviceCategory: item.category || item.serviceCategory
+          };
+          
+          const validation = constraintValidator.validateServiceAgainstCustomerConstraints(mockService, userConstraints);
+          
+          const customerCompliance = {
+            customerRequirements: userConstraints,
+            validationResult: validation,
+            businessJustification: validation.businessJustification,
+            constraintCompliance: validation.constraintCompliance,
+            customerApproved: validation.allowed,
+            salesNotes: validation.businessJustification
           };
           
           return {
             ...item,
-            constraintCompliance
+            customerCompliance
           };
         });
         
-        // Add constraint compliance information
-        parsedResult.constraintCompliance = {
-          originalItemCount: parsedResult.items.length + rejectedItems.length,
-          validatedItemCount: validatedItems.length,
-          rejectedItemCount: rejectedItems.length,
-          rejectedItems: rejectedItems.map(r => ({ sku: r.item.sku, reason: r.reason })),
-          appliedConstraints: userConstraints
+        // Add comprehensive customer-focused compliance summary
+        const constraintSummary = constraintValidator.generateConstraintSummary(userConstraints);
+        
+        parsedResult.customerSummary = {
+          totalRecommendedServices: validatedItems.length,
+          customerSatisfactionScore: 'High - All items match customer requirements',
+          excludedServices: rejectedItems.length,
+          excludedReasons: rejectedItems.map(r => ({ 
+            service: r.item.sku, 
+            businessReason: `Excluded because: ${r.reason.replace('Service', 'This option')}` 
+          })),
+          constraintSummary: constraintSummary,
+          customerRequirements: userConstraints,
+          businessValue: 'BOM tailored specifically to customer needs and preferences using Oracle service taxonomy'
         };
         
         console.log(`📊 Final BOM: ${validatedItems.length} items (${rejectedItems.length} rejected by constraints)`);

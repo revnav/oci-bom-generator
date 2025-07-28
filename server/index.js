@@ -6,7 +6,7 @@ const path = require('path');
 require('dotenv').config();
 
 const llmService = require('./services/llmService');
-const ociService = require('./services/ociService');
+const ociService = require('./services/ociServiceRedesigned');
 const documentParser = require('./services/documentParser');
 const excelGenerator = require('./services/excelGenerator');
 const savedPromptsService = require('./services/savedPromptsService');

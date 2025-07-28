@@ -36,6 +36,26 @@ cd client && npm test
 # Run individual test files
 cd server && npx jest services/llmService.test.js
 cd client && npm test -- --testNamePattern="ComponentName"
+
+# Test constraint system (standalone test files available)
+node test-constraints.js
+node test-universal-constraints.js
+node test-specific-constraints.js
+```
+
+### Debugging & Development
+```bash
+# Check API health
+curl http://localhost:3001/api/health
+
+# Verify LLM providers are configured
+curl http://localhost:3001/api/llm-providers
+
+# Test constraint detection manually
+node test-constraints-standalone.js
+
+# Monitor server logs with detailed constraint processing
+npm run server  # Watch for "Constraint detected:", "Service filtered:", etc.
 ```
 
 ### Code Quality
@@ -65,7 +85,7 @@ This is a full-stack React/Node.js application that generates Oracle Cloud Infra
 ### Key Components
 
 #### Backend Services (`server/services/`)
-- **`llmService.js`**: Multi-provider AI service handling OpenAI, Anthropic, Google Gemini, xAI Grok, and DeepSeek APIs
+- **`llmService.js`**: Multi-provider AI service handling OpenAI GPT-4o, Claude 3.5 Sonnet, Google Gemini 2.5 Pro, xAI Grok-4-latest, and DeepSeek V3 APIs
 - **`ociService.js`**: Oracle Cloud pricing API integration with caching and service matching
 - **`documentParser.js`**: Document processing (PDF, Office docs, images) with OCR support
 - **`excelGenerator.js`**: Professional Excel BOM generation with formatting and formulas
@@ -97,11 +117,26 @@ PORT=3001
 NODE_ENV=development
 ```
 
+### LLM Model Configuration
+
+Current model versions used (defined in `llmService.js:992-1043`):
+- **OpenAI**: `gpt-4o` (latest GPT-4 optimized model)
+- **Anthropic**: `claude-3-5-sonnet-20241022` (latest Claude 3.5 Sonnet)
+- **Google**: `gemini-2.5-pro` (latest Gemini Pro with enhanced capabilities)
+- **xAI**: `grok-4-latest` (most current Grok model)
+- **DeepSeek**: `deepseek-chat` (cost-effective alternative)
+
 ### Important Technical Details
 
-- **Rate Limiting**: Applied to all `/api/` routes via middleware (`server/middleware/rateLimiter.js`)
+- **Rate Limiting**: Multi-tier rate limiting system with different limits per operation type:
+  - General API: 100 requests per 15 minutes per IP (`server/middleware/rateLimiter.js`)
+  - BOM Generation: 10 requests per hour per IP (resource intensive)
+  - Document Upload: 20 uploads per hour per IP
+  - LLM Calls: 200 calls per hour per IP
+  - Burst Protection: 5 requests per 10 seconds
+  - Cost-based limiting for expensive operations
 - **File Uploads**: 10MB limit, supports PDF/Office/images, stored in `server/uploads/`
-- **Client Proxy**: React dev server proxies API calls to `http://localhost:3001` (configured in `client/package.json`)
+- **Client Proxy**: React dev server proxies API calls to `http://localhost:3001` (configured in `client/package.json:61`)
 - **Security**: Helmet.js headers, CORS, input validation with Joi schemas (`server/middleware/validation.js`)
 - **Error Handling**: Comprehensive error handling with user-friendly messages
 - **Caching**: OCI service data cached for 1 hour to reduce API calls
@@ -123,29 +158,42 @@ NODE_ENV=development
 ### Key File Locations
 
 - **Main Entry Points**: `server/index.js`, `client/src/App.js`
-- **API Routes**: All defined in `server/index.js` (no separate router files)
+- **API Routes**: All defined in `server/index.js` (no separate router files) - includes:
+  - `GET /api/health` - Health check endpoint
+  - `GET /api/llm-providers` - Available LLM providers
+  - `POST /api/generate-bom` - Main BOM generation (with validation middleware)
+  - `POST /api/upload-document` - Document upload and parsing
+  - `GET /api/oci-categories` - OCI service categories
+  - Saved prompts CRUD: `GET|POST|PUT|DELETE /api/saved-prompts`
 - **Services**: All business logic in `server/services/` directory
 - **Frontend Components**: `client/src/components/` and `client/src/pages/`
 - **Data Storage**: `server/data/saved-prompts.json` for prompt persistence
-- **Configuration**: Environment variables in `server/.env`, proxy in `client/package.json`
+- **Configuration**: Environment variables in `server/.env`, proxy in `client/package.json:61`
 
 ### User Instruction Handling (New Feature)
 
 The system now includes sophisticated constraint detection and enforcement:
 
-- **Constraint Detection**: `llmService.extractUserConstraints()` automatically detects:
-  - Restrictive instructions: "only consider X", "exclusively Y", "specifically Z"
-  - Exclusions: "do not include", "exclude", "avoid", "no X"
-  - Specific SKUs: "SKU B88317", "part number X", "service code Y"
+- **Constraint Detection**: `llmService.extractUserConstraints()` uses advanced regex patterns to detect:
+  - Restrictive instructions: "only consider X", "exclusively Y", "specifically Z", "must use/be/include"
+  - Exclusions: "do not include", "exclude", "avoid", "no X", "without Y"
+  - Specific SKUs: "SKU B88317", "part number X", "service code Y" (auto-detects patterns like B88317, B109356)
+  - Category-based: "only compute services", "exclude storage and networking"
+  - Service types: "Standard instances only", "BYOL licensing", "Basic tiers"
+
+- **Universal Pattern Matching**: Uses keyword-based validation with stop-word filtering for flexible constraint handling
 
 - **Service Filtering**: OCI services are filtered BEFORE LLM processing based on detected constraints
 
-- **Validation**: Final BOM items are validated against constraints in `validateServiceAgainstConstraints()`
+- **Multi-Stage Validation**: 
+  - Pre-LLM filtering using `validateServiceAgainstConstraints()`
+  - Enhanced LLM prompts with constraint information
+  - Post-generation validation with compliance reporting
 
 - **Compliance Reporting**: Detailed logs show which items were included/excluded and why
 
 **Critical Implementation Notes:**
 - User constraints are treated as **mandatory**, not suggestions
 - System never expands scope beyond user-defined limitations
-- LLM prompts are enhanced with constraint information
-- Service validation happens at multiple stages (pre-LLM and post-generation)
+- Supports ANY constraint type through universal pattern detection
+- Keyword matching tests against all service properties (displayName, serviceCategory, partNumber, skuType)
