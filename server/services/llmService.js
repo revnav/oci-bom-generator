@@ -726,9 +726,9 @@ Create detailed BOM with realistic quantities and constraint compliance document
         // Specific fix for notes field with embedded quotes - replace with safe characters
         .replace(/"notes":\s*"([^"]*)'([^"]*)"([,}])/g, '"notes": "$1-$2"$3')  // Replace single quotes in notes with hyphens
         .replace(/"notes":\s*"([^"]*)"([^",}]*)"([^",}]*)"([,}])/g, '"notes": "$1-$2-$3"$4')  // Replace problematic internal quotes with hyphens
-        // General quote fixes for other fields
-        .replace(/"([^"]*)'([^"]*)":/g, '"$1\\'$2":')  // Escape single quotes in keys
-        .replace(/:\s*"([^"]*)'([^"]*)"([,}])/g, ': "$1\\'$2"$3')  // Escape single quotes in non-notes values
+        // General quote fixes for other fields - replace with safe characters
+        .replace(/"([^"]*)'([^"]*)":/g, '"$1-$2":')  // Replace single quotes in keys with hyphens
+        .replace(/:\s*"([^"]*)'([^"]*)"([,}])/g, ': "$1-$2"$3')  // Replace single quotes in values with hyphens
       
       console.log(`🧹 Cleaned JSON preview:`, cleanedJson.substring(0, 300) + '...');
       
