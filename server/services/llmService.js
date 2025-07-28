@@ -689,27 +689,124 @@ Create detailed BOM with realistic quantities and constraint compliance document
       console.log(`📝 ${provider} response length:`, response?.length || 0);
       console.log(`📄 ${provider} response preview:`, response?.substring(0, 200) || 'No response');
       
-      // Extract JSON from response - handle markdown code blocks
-      let jsonString = response;
+      // Enhanced response validation for all LLMs
+      if (!response || typeof response !== 'string' || response.trim().length === 0) {
+        console.error(`❌ Empty or invalid response from ${provider}`);
+        console.error('Response type:', typeof response);
+        console.error('Response value:', response);
+        throw new Error(`${provider} returned empty or invalid response`);
+      }
       
-      // Remove markdown code blocks if present
+      console.log(`📝 ${provider} raw response length: ${response.length}`);
+      console.log(`📄 ${provider} response starts with: "${response.substring(0, 100).replace(/\n/g, '\\n')}..."`);
+      
+      // Enhanced JSON extraction that works across all LLMs
+      let jsonString = '';
+      
+      // Method 1: Look for markdown code blocks (common in Claude, GPT)
       if (response.includes('```json')) {
         const codeBlockMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
-        if (codeBlockMatch) {
+        if (codeBlockMatch && codeBlockMatch[1].trim()) {
           jsonString = codeBlockMatch[1].trim();
-        }
-      } else {
-        // Fallback to original regex
-        const jsonMatch = response.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          jsonString = jsonMatch[0];
+          console.log(`🔍 Extracted JSON from ${provider} markdown block (${jsonString.length} chars)`);
         }
       }
       
-      if (!jsonString || (!jsonString.startsWith('{') && !jsonString.startsWith('['))) {
-        console.error('❌ No valid JSON found in LLM response from', provider);
+      // Method 2: Look for ```\n{...} (code block without "json" label)
+      if (!jsonString && response.includes('```')) {
+        const codeBlockMatch = response.match(/```\s*([\s\S]*?)\s*```/);
+        if (codeBlockMatch && codeBlockMatch[1].trim().startsWith('{')) {
+          jsonString = codeBlockMatch[1].trim();
+          console.log(`🔍 Extracted JSON from ${provider} unlabeled code block (${jsonString.length} chars)`);
+        }
+      }
+      
+      // Method 3: Look for standalone JSON object (common in Grok, DeepSeek)
+      if (!jsonString) {
+        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        if (jsonMatch && jsonMatch[0]) {
+          jsonString = jsonMatch[0];
+          console.log(`🔍 Extracted JSON from ${provider} using regex (${jsonString.length} chars)`);
+        }
+      }
+      
+      // Method 4: Try to clean and extract from the entire response
+      if (!jsonString) {
+        const cleanResponse = response.trim();
+        if (cleanResponse.startsWith('{') && cleanResponse.endsWith('}')) {
+          jsonString = cleanResponse;
+          console.log(`🔍 Using full response from ${provider} as JSON (${jsonString.length} chars)`);
+        }
+      }
+      
+      // Method 5: Look for "items" array and extract surrounding JSON
+      if (!jsonString && response.includes('"items"')) {
+        // Find the start of the JSON object containing "items"
+        const itemsIndex = response.indexOf('"items"');
+        let start = itemsIndex;
+        
+        // Search backwards for the opening brace
+        while (start > 0 && response[start] !== '{') {
+          start--;
+        }
+        
+        // Search forwards for the closing brace, counting nested braces
+        let end = itemsIndex;
+        let braceCount = 0;
+        let inString = false;
+        let escapeNext = false;
+        
+        for (let i = start; i < response.length; i++) {
+          const char = response[i];
+          
+          if (escapeNext) {
+            escapeNext = false;
+            continue;
+          }
+          
+          if (char === '\\') {
+            escapeNext = true;
+            continue;
+          }
+          
+          if (char === '"' && !escapeNext) {
+            inString = !inString;
+            continue;
+          }
+          
+          if (!inString) {
+            if (char === '{') {
+              braceCount++;
+            } else if (char === '}') {
+              braceCount--;
+              if (braceCount === 0) {
+                end = i + 1;
+                break;
+              }
+            }
+          }
+        }
+        
+        if (braceCount === 0 && end > start) {
+          jsonString = response.substring(start, end);
+          console.log(`🔍 Extracted JSON around "items" from ${provider} (${jsonString.length} chars)`);
+        }
+      }
+      
+      // Final validation
+      if (!jsonString || jsonString.trim().length === 0) {
+        console.error(`❌ No JSON content found in ${provider} response`);
+        console.error('Response length:', response.length);
+        console.error('First 500 chars:', response.substring(0, 500));
+        console.error('Last 200 chars:', response.length > 200 ? response.substring(response.length - 200) : response);
+        throw new Error(`${provider} did not return any JSON content`);
+      }
+      
+      if (!jsonString.includes('{') || !jsonString.includes('"items"')) {
+        console.error(`❌ No valid JSON structure found in ${provider} response`);
+        console.error('Extracted content:', jsonString.substring(0, 300));
         console.error('Full response:', response);
-        throw new Error('LLM did not return valid JSON format');
+        throw new Error(`${provider} did not return valid JSON format - no JSON structure found`);
       }
       
       console.log(`🔍 Extracted JSON from ${provider}:`, jsonString.substring(0, 200) + '...');
@@ -960,109 +1057,243 @@ Create detailed BOM with realistic quantities and constraint compliance document
   }
 
   async callLLM(provider, systemPrompt, userPrompt) {
-    switch (provider) {
-      case 'openai':
-        return await this.callOpenAI(systemPrompt, userPrompt);
-      case 'claude':
-        return await this.callClaude(systemPrompt, userPrompt);
-      case 'gemini':
-        return await this.callGemini(systemPrompt, userPrompt);
-      case 'grok':
-        return await this.callGrok(systemPrompt, userPrompt);
-      case 'deepseek':
-        return await this.callDeepSeek(systemPrompt, userPrompt);
-      default:
-        throw new Error(`Unsupported LLM provider: ${provider}`);
+    console.log(`🤖 Calling ${provider} LLM...`);
+    console.log(`📄 System prompt length: ${systemPrompt.length} chars`);
+    console.log(`📄 User prompt length: ${userPrompt.length} chars`);
+    
+    const startTime = Date.now();
+    
+    try {
+      let response;
+      switch (provider) {
+        case 'openai':
+          response = await this.callOpenAI(systemPrompt, userPrompt);
+          break;
+        case 'claude':
+          response = await this.callClaude(systemPrompt, userPrompt);
+          break;
+        case 'gemini':
+          response = await this.callGemini(systemPrompt, userPrompt);
+          break;
+        case 'grok':
+          response = await this.callGrok(systemPrompt, userPrompt);
+          break;
+        case 'deepseek':
+          response = await this.callDeepSeek(systemPrompt, userPrompt);
+          break;
+        default:
+          throw new Error(`Unsupported LLM provider: ${provider}`);
+      }
+      
+      const duration = Date.now() - startTime;
+      console.log(`✅ ${provider} completed in ${duration}ms`);
+      return response;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`❌ ${provider} failed after ${duration}ms:`, error.message);
+      throw error;
     }
   }
 
   async callOpenAI(systemPrompt, userPrompt) {
-    const response = await this.openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      temperature: 0.3,
-      max_tokens: 4000
-    });
+    try {
+      if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === 'your_openai_api_key_here') {
+        throw new Error('OpenAI API key not configured. Please set OPENAI_API_KEY in your .env file.');
+      }
 
-    return response.choices[0].message.content;
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.3,
+        max_tokens: 4000
+      });
+
+      if (!response || !response.choices || !response.choices[0] || !response.choices[0].message) {
+        throw new Error('OpenAI API returned invalid response structure');
+      }
+
+      const content = response.choices[0].message.content;
+      if (!content || typeof content !== 'string' || content.trim().length === 0) {
+        throw new Error('OpenAI returned empty or invalid content');
+      }
+
+      console.log(`✅ OpenAI response received (${content.length} chars)`);
+      return content;
+    } catch (error) {
+      console.error('❌ OpenAI API error:', error.message);
+      throw new Error(`OpenAI API failed: ${error.message}`);
+    }
   }
 
   async callClaude(systemPrompt, userPrompt) {
-    const response = await this.anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 4000,
-      temperature: 0.3,
-      system: systemPrompt,
-      messages: [
-        { role: 'user', content: userPrompt }
-      ]
-    });
+    try {
+      if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'your_anthropic_api_key_here') {
+        throw new Error('Claude API key not configured. Please set ANTHROPIC_API_KEY in your .env file.');
+      }
 
-    return response.content[0].text;
+      const response = await this.anthropic.messages.create({
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 4000,
+        temperature: 0.3,
+        system: systemPrompt,
+        messages: [
+          { role: 'user', content: userPrompt }
+        ]
+      });
+
+      if (!response || !response.content || !response.content[0] || !response.content[0].text) {
+        throw new Error('Claude API returned invalid response structure');
+      }
+
+      const content = response.content[0].text;
+      if (!content || typeof content !== 'string' || content.trim().length === 0) {
+        throw new Error('Claude returned empty or invalid content');
+      }
+
+      console.log(`✅ Claude response received (${content.length} chars)`);
+      return content;
+    } catch (error) {
+      console.error('❌ Claude API error:', error.message);
+      throw new Error(`Claude API failed: ${error.message}`);
+    }
   }
 
   async callGemini(systemPrompt, userPrompt) {
-    if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'your_gemini_api_key_here') {
-      throw new Error('Gemini API key not configured. Please set GEMINI_API_KEY in your .env file.');
-    }
-
-    // Use the current Gemini 2.5 Pro model
-    const model = this.gemini.getGenerativeModel({ 
-      model: 'gemini-2.5-pro',
-      generationConfig: {
-        temperature: 0.3,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 8192,
+    try {
+      if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'your_gemini_api_key_here') {
+        throw new Error('Gemini API key not configured. Please set GEMINI_API_KEY in your .env file.');
       }
-    });
-    
-    const prompt = `${systemPrompt}\n\nUser Request: ${userPrompt}`;
-    const result = await model.generateContent(prompt);
-    
-    return result.response.text();
+
+      // Use the current Gemini 2.5 Pro model
+      const model = this.gemini.getGenerativeModel({ 
+        model: 'gemini-2.5-pro',
+        generationConfig: {
+          temperature: 0.3,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 8192,
+        }
+      });
+      
+      const prompt = `${systemPrompt}\n\nUser Request: ${userPrompt}`;
+      const result = await model.generateContent(prompt);
+      
+      if (!result || !result.response) {
+        throw new Error('Gemini API returned invalid response structure');
+      }
+
+      const content = result.response.text();
+      if (!content || typeof content !== 'string' || content.trim().length === 0) {
+        throw new Error('Gemini returned empty or invalid content');
+      }
+
+      console.log(`✅ Gemini response received (${content.length} chars)`);
+      return content;
+    } catch (error) {
+      console.error('❌ Gemini API error:', error.message);
+      throw new Error(`Gemini API failed: ${error.message}`);
+    }
   }
 
   async callGrok(systemPrompt, userPrompt) {
     // Grok API integration - using grok-4-latest model
-    const response = await axios.post('https://api.x.ai/v1/chat/completions', {
-      model: 'grok-4-latest',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      temperature: 0.3,
-      max_tokens: 4000
-    }, {
-      headers: {
-        'Authorization': `Bearer ${process.env.GROK_API_KEY}`,
-        'Content-Type': 'application/json'
+    try {
+      if (!process.env.GROK_API_KEY || process.env.GROK_API_KEY === 'your_grok_api_key_here') {
+        throw new Error('Grok API key not configured. Please set GROK_API_KEY in your .env file.');
       }
-    });
 
-    return response.data.choices[0].message.content;
+      const response = await axios.post('https://api.x.ai/v1/chat/completions', {
+        model: 'grok-4-latest',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.3,
+        max_tokens: 4000,
+        stream: false
+      }, {
+        headers: {
+          'Authorization': `Bearer ${process.env.GROK_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 60000
+      });
+
+      // Enhanced response validation for Grok
+      if (!response || !response.data) {
+        console.error('❌ Grok API returned no data');
+        throw new Error('Grok API returned empty response');
+      }
+
+      if (!response.data.choices || !response.data.choices[0] || !response.data.choices[0].message) {
+        console.error('❌ Grok API response structure invalid:', JSON.stringify(response.data, null, 2));
+        throw new Error('Grok API response structure invalid');
+      }
+
+      const content = response.data.choices[0].message.content;
+      if (!content || typeof content !== 'string' || content.trim().length === 0) {
+        console.error('❌ Grok returned empty content');
+        console.error('Full response:', JSON.stringify(response.data, null, 2));
+        throw new Error('Grok returned empty or invalid content');
+      }
+
+      console.log(`✅ Grok response received (${content.length} chars)`);
+      return content;
+    } catch (error) {
+      console.error('❌ Grok API error:', error.message);
+      if (error.response) {
+        console.error('Grok API error response:', error.response.status, error.response.data);
+      }
+      throw new Error(`Grok API failed: ${error.message}`);
+    }
   }
 
   async callDeepSeek(systemPrompt, userPrompt) {
-    const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
-      model: 'deepseek-chat',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      temperature: 0.3,
-      max_tokens: 4000
-    }, {
-      headers: {
-        'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
-        'Content-Type': 'application/json'
+    try {
+      if (!process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY === 'your_deepseek_api_key_here') {
+        throw new Error('DeepSeek API key not configured. Please set DEEPSEEK_API_KEY in your .env file.');
       }
-    });
 
-    return response.data.choices[0].message.content;
+      const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.3,
+        max_tokens: 4000,
+        stream: false
+      }, {
+        headers: {
+          'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 60000
+      });
+
+      if (!response || !response.data || !response.data.choices || !response.data.choices[0] || !response.data.choices[0].message) {
+        console.error('❌ DeepSeek API response structure invalid:', JSON.stringify(response?.data, null, 2));
+        throw new Error('DeepSeek API response structure invalid');
+      }
+
+      const content = response.data.choices[0].message.content;
+      if (!content || typeof content !== 'string' || content.trim().length === 0) {
+        console.error('❌ DeepSeek returned empty content');
+        throw new Error('DeepSeek returned empty or invalid content');
+      }
+
+      console.log(`✅ DeepSeek response received (${content.length} chars)`);
+      return content;
+    } catch (error) {
+      console.error('❌ DeepSeek API error:', error.message);
+      if (error.response) {
+        console.error('DeepSeek API error response:', error.response.status, error.response.data);
+      }
+      throw new Error(`DeepSeek API failed: ${error.message}`);
+    }
   }
 }
 
